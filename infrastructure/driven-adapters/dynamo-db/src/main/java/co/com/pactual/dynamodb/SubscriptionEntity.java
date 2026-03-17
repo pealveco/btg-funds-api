@@ -20,7 +20,7 @@ public class SubscriptionEntity {
     }
 
     @DynamoDbPartitionKey
-    @DynamoDbAttribute("subscription_id")
+    @DynamoDbAttribute("subscriptionId")
     public String getSubscriptionId() {
         return subscriptionId;
     }
@@ -29,8 +29,8 @@ public class SubscriptionEntity {
         this.subscriptionId = subscriptionId;
     }
 
-    @DynamoDbSecondaryPartitionKey(indexNames = "gsi_client_fund")
-    @DynamoDbAttribute("client_id")
+    @DynamoDbSecondaryPartitionKey(indexNames = "clientId-index")
+    @DynamoDbAttribute("clientId")
     public String getClientId() {
         return clientId;
     }
@@ -39,8 +39,7 @@ public class SubscriptionEntity {
         this.clientId = clientId;
     }
 
-    @DynamoDbSecondarySortKey(indexNames = "gsi_client_fund")
-    @DynamoDbAttribute("fund_id")
+    @DynamoDbAttribute("fundId")
     public String getFundId() {
         return fundId;
     }
@@ -67,7 +66,7 @@ public class SubscriptionEntity {
         this.status = status;
     }
 
-    @DynamoDbAttribute("created_at")
+    @DynamoDbAttribute("createdAt")
     public LocalDateTime getCreatedAt() {
         return createdAt;
     }
@@ -76,7 +75,7 @@ public class SubscriptionEntity {
         this.createdAt = createdAt;
     }
 
-    @DynamoDbAttribute("cancelled_at")
+    @DynamoDbAttribute("cancelledAt")
     public LocalDateTime getCancelledAt() {
         return cancelledAt;
     }
