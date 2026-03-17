@@ -339,3 +339,4 @@ gradle-app.setting
 build-cache/
 .env
 .env.*
+!.env.example

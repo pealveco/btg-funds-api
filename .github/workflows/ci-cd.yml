@@ -1,0 +1,100 @@
+name: CI/CD
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-east-1
+  PROJECT_NAME: btg-funds-api
+  ENVIRONMENT: dev
+  STACK_NAME: btg-funds-api-dev
+  IMAGE_TAG: latest
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Grant execute permission to Gradle wrapper
+        run: chmod +x gradlew
+
+      - name: Build project
+        run: ./gradlew clean build
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Validate CloudFormation template
+        run: aws cloudformation validate-template --template-body file://deployment/aws/cloudformation.yaml
+
+      - name: Bootstrap infrastructure and resolve ECR repository
+        id: ecr
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if aws cloudformation describe-stacks --stack-name "$STACK_NAME" >/dev/null 2>&1; then
+            echo "Stack $STACK_NAME already exists"
+          else
+            aws cloudformation deploy \
+              --stack-name "$STACK_NAME" \
+              --template-file deployment/aws/cloudformation.yaml \
+              --capabilities CAPABILITY_NAMED_IAM \
+              --no-fail-on-empty-changeset \
+              --parameter-overrides \
+                ProjectName="$PROJECT_NAME" \
+                Environment="$ENVIRONMENT" \
+                AppImageUri=""
+          fi
+
+          ECR_REPOSITORY_URI="$(aws cloudformation describe-stacks \
+            --stack-name "$STACK_NAME" \
+            --query "Stacks[0].Outputs[?OutputKey=='EcrRepositoryUri'].OutputValue" \
+            --output text)"
+
+          if [ -z "$ECR_REPOSITORY_URI" ] || [ "$ECR_REPOSITORY_URI" = "None" ]; then
+            echo "EcrRepositoryUri output not found in stack $STACK_NAME" >&2
+            exit 1
+          fi
+
+          echo "ecr_repository_uri=$ECR_REPOSITORY_URI" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build Docker image
+        run: docker build -f deployment/Dockerfile -t ${{ steps.ecr.outputs.ecr_repository_uri }}:${{ env.IMAGE_TAG }} .
+
+      - name: Push Docker image
+        run: docker push ${{ steps.ecr.outputs.ecr_repository_uri }}:${{ env.IMAGE_TAG }}
+
+      - name: Deploy CloudFormation stack
+        run: |
+          aws cloudformation deploy \
+            --stack-name "$STACK_NAME" \
+            --template-file deployment/aws/cloudformation.yaml \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --no-fail-on-empty-changeset \
+            --parameter-overrides \
+              ProjectName="$PROJECT_NAME" \
+              Environment="$ENVIRONMENT" \
+              AppImageUri="${{ steps.ecr.outputs.ecr_repository_uri }}:${{ env.IMAGE_TAG }}"

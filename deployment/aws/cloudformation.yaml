@@ -1,0 +1,380 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  BTG Funds API - Infraestructura para prueba técnica:
+  DynamoDB + SNS + ECR + App Runner + seed inicial de fondos.
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: btg-funds-api
+
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - qa
+      - prod
+
+  AppImageUri:
+    Type: String
+    Default: ''
+    Description: URI de la imagen Docker en ECR
+
+  AppPort:
+    Type: Number
+    Default: 8080
+
+Conditions:
+  HasAppImage: !Not [!Equals [!Ref AppImageUri, ""]]
+
+Resources:
+
+  ClientsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ProjectName}-${Environment}-clients'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: clientId
+          AttributeType: S
+        - AttributeName: email
+          AttributeType: S
+      KeySchema:
+        - AttributeName: clientId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: email-index
+          KeySchema:
+            - AttributeName: email
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      SSESpecification:
+        SSEEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+
+  FundsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ProjectName}-${Environment}-funds'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: fundId
+          AttributeType: S
+        - AttributeName: category
+          AttributeType: S
+      KeySchema:
+        - AttributeName: fundId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: category-index
+          KeySchema:
+            - AttributeName: category
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      SSESpecification:
+        SSEEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+
+  SubscriptionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ProjectName}-${Environment}-subscriptions'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: subscriptionId
+          AttributeType: S
+        - AttributeName: clientId
+          AttributeType: S
+        - AttributeName: clientFundKey
+          AttributeType: S
+      KeySchema:
+        - AttributeName: subscriptionId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: clientId-index
+          KeySchema:
+            - AttributeName: clientId
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+        - IndexName: clientFundKey-index
+          KeySchema:
+            - AttributeName: clientFundKey
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      SSESpecification:
+        SSEEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+
+  TransactionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ProjectName}-${Environment}-transactions'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: transactionId
+          AttributeType: S
+        - AttributeName: clientId
+          AttributeType: S
+        - AttributeName: createdAt
+          AttributeType: S
+      KeySchema:
+        - AttributeName: transactionId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: clientId-createdAt-index
+          KeySchema:
+            - AttributeName: clientId
+              KeyType: HASH
+            - AttributeName: createdAt
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      SSESpecification:
+        SSEEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+
+  NotificationsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${ProjectName}-${Environment}-notifications'
+
+  EcrRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Ref ProjectName
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      EncryptionConfiguration:
+        EncryptionType: AES256
+
+  AppRunnerEcrAccessRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-${Environment}-apprunner-ecr-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - build.apprunner.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSAppRunnerServicePolicyForECRAccess
+
+  AppRunnerInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-${Environment}-apprunner-instance-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - tasks.apprunner.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub '${ProjectName}-${Environment}-app-policy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: DynamoAccess
+                Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                Resource:
+                  - !GetAtt ClientsTable.Arn
+                  - !Sub '${ClientsTable.Arn}/index/*'
+                  - !GetAtt FundsTable.Arn
+                  - !Sub '${FundsTable.Arn}/index/*'
+                  - !GetAtt SubscriptionsTable.Arn
+                  - !Sub '${SubscriptionsTable.Arn}/index/*'
+                  - !GetAtt TransactionsTable.Arn
+                  - !Sub '${TransactionsTable.Arn}/index/*'
+              - Sid: SnsPublish
+                Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: !Ref NotificationsTopic
+
+  SeedFundsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-${Environment}-seed-funds-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub '${ProjectName}-${Environment}-seed-funds-policy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: Logs
+                Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: '*'
+              - Sid: DynamoSeedFunds
+                Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:GetItem
+                Resource: !GetAtt FundsTable.Arn
+
+  SeedFundsFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-${Environment}-seed-funds'
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt SeedFundsRole.Arn
+      Timeout: 60
+      Environment:
+        Variables:
+          FUNDS_TABLE_NAME: !Ref FundsTable
+      Code:
+        ZipFile: |
+          import json
+          import os
+          import urllib.request
+          import boto3
+
+          dynamodb = boto3.resource("dynamodb")
+          table = dynamodb.Table(os.environ["FUNDS_TABLE_NAME"])
+
+          FUNDS = [
+              {"fundId": "1", "name": "FPV_BTG_PACTUAL_RECAUDADORA", "minimumAmount": 75000, "category": "FPV"},
+              {"fundId": "2", "name": "FPV_BTG_PACTUAL_ECOPETROL", "minimumAmount": 125000, "category": "FPV"},
+              {"fundId": "3", "name": "DEUDAPRIVADA", "minimumAmount": 50000, "category": "FIC"},
+              {"fundId": "4", "name": "FDO-ACCIONES", "minimumAmount": 250000, "category": "FIC"},
+              {"fundId": "5", "name": "FPV_BTG_PACTUAL_DINAMICA", "minimumAmount": 100000, "category": "FPV"}
+          ]
+
+          def send_response(event, context, status, data, physical_id=None):
+              response_body = json.dumps({
+                  "Status": status,
+                  "Reason": f"See details in CloudWatch Log Stream: {context.log_stream_name}",
+                  "PhysicalResourceId": physical_id or context.log_stream_name,
+                  "StackId": event["StackId"],
+                  "RequestId": event["RequestId"],
+                  "LogicalResourceId": event["LogicalResourceId"],
+                  "Data": data
+              }).encode("utf-8")
+
+              req = urllib.request.Request(
+                  event["ResponseURL"],
+                  data=response_body,
+                  method="PUT",
+                  headers={
+                      "content-type": "",
+                      "content-length": str(len(response_body))
+                  }
+              )
+              with urllib.request.urlopen(req) as response:
+                  print(response.read().decode("utf-8"))
+
+          def handler(event, context):
+              try:
+                  request_type = event["RequestType"]
+                  if request_type in ["Create", "Update"]:
+                      for fund in FUNDS:
+                          table.put_item(Item=fund)
+
+                  send_response(event, context, "SUCCESS", {"message": "Funds seeded successfully"})
+              except Exception as e:
+                  send_response(event, context, "FAILED", {"message": str(e)})
+
+  SeedFundsCustomResource:
+    Type: Custom::SeedFunds
+    DependsOn:
+      - FundsTable
+      - SeedFundsFunction
+    Properties:
+      ServiceToken: !GetAtt SeedFundsFunction.Arn
+
+  AppRunnerService:
+    Type: AWS::AppRunner::Service
+    Condition: HasAppImage
+    Properties:
+      ServiceName: !Sub '${ProjectName}-${Environment}'
+      SourceConfiguration:
+        AuthenticationConfiguration:
+          AccessRoleArn: !GetAtt AppRunnerEcrAccessRole.Arn
+        AutoDeploymentsEnabled: false
+        ImageRepository:
+          ImageRepositoryType: ECR
+          ImageIdentifier: !Ref AppImageUri
+          ImageConfiguration:
+            Port: !Ref AppPort
+            RuntimeEnvironmentVariables:
+              - Name: AWS_REGION
+                Value: !Ref AWS::Region
+              - Name: CLIENTS_TABLE
+                Value: !Ref ClientsTable
+              - Name: FUNDS_TABLE
+                Value: !Ref FundsTable
+              - Name: SUBSCRIPTIONS_TABLE
+                Value: !Ref SubscriptionsTable
+              - Name: TRANSACTIONS_TABLE
+                Value: !Ref TransactionsTable
+              - Name: NOTIFICATIONS_TOPIC_ARN
+                Value: !Ref NotificationsTopic
+      InstanceConfiguration:
+        Cpu: 1 vCPU
+        Memory: 2 GB
+        InstanceRoleArn: !GetAtt AppRunnerInstanceRole.Arn
+      HealthCheckConfiguration:
+        Protocol: HTTP
+        Path: /actuator/health
+        Interval: 10
+        Timeout: 5
+        HealthyThreshold: 1
+        UnhealthyThreshold: 5
+
+Outputs:
+  ClientsTableName:
+    Value: !Ref ClientsTable
+
+  FundsTableName:
+    Value: !Ref FundsTable
+
+  SubscriptionsTableName:
+    Value: !Ref SubscriptionsTable
+
+  TransactionsTableName:
+    Value: !Ref TransactionsTable
+
+  NotificationsTopicArn:
+    Value: !Ref NotificationsTopic
+
+  EcrRepositoryUri:
+    Value: !GetAtt EcrRepository.RepositoryUri
+
+  AppRunnerServiceUrl:
+    Condition: HasAppImage
+    Value: !GetAtt AppRunnerService.ServiceUrl

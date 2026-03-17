@@ -211,9 +211,64 @@ Se incluye la solución a la consulta SQL solicitada en:
 El proyecto está diseñado para ser desplegado en AWS utilizando:
 
 - AWS CloudFormation
+- Amazon ECR
+- AWS App Runner
 - DynamoDB
-- API Gateway (opcional)
-- Lambda o ECS (opcional)
+- SNS
+
+---
+
+## CI/CD
+
+El repositorio incluye un workflow de GitHub Actions en `.github/workflows/ci-cd.yml` orientado a una prueba técnica backend, con un flujo simple y defendible:
+
+- hace checkout del código
+- configura Java 17 y usa el wrapper de Gradle
+- ejecuta `./gradlew clean build`
+- valida `deployment/aws/cloudformation.yaml`
+- autentica contra AWS con secrets de GitHub
+- crea la infraestructura base si el stack aún no existe
+- obtiene `EcrRepositoryUri` desde los outputs del stack
+- construye la imagen Docker usando `deployment/Dockerfile`
+- publica la imagen en Amazon ECR con tag `latest`
+- actualiza el stack `btg-funds-api-dev` pasando `AppImageUri=<ECR_URI>:latest`
+
+### Secrets requeridos
+
+- `AWS_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY`
+- `AWS_REGION`
+
+`AWS_ACCOUNT_ID` no es necesario porque el pipeline obtiene la URI del repositorio ECR desde los outputs de CloudFormation.
+
+### Variables del pipeline
+
+- `AWS_REGION=us-east-1`
+- `PROJECT_NAME=btg-funds-api`
+- `ENVIRONMENT=dev`
+- `STACK_NAME=btg-funds-api-dev`
+- `IMAGE_TAG=latest`
+
+### Cómo despliega
+
+En el primer despliegue el workflow crea la infraestructura base sin imagen para materializar el repositorio ECR. Luego resuelve el output `EcrRepositoryUri`, publica la imagen y ejecuta un segundo `cloudformation deploy` con `AppImageUri` para crear o actualizar App Runner.
+
+### Recursos AWS usados
+
+- `AWS::ECR::Repository`
+- `AWS::AppRunner::Service`
+- `AWS::DynamoDB::Table`
+- `AWS::SNS::Topic`
+- `AWS::IAM::Role`
+- `AWS::Lambda::Function`
+
+### Limitaciones y mejoras futuras
+
+- El workflow usa `latest` por simplicidad de prueba técnica; en producción conviene versionar con SHA o tags semánticos.
+- El pipeline usa credenciales estáticas de GitHub Secrets; en producción conviene migrar a OIDC con rol federado.
+- El deploy apunta a `dev`; para `qa` y `prod` conviene separar entornos y aprobaciones.
+- El build actualmente ejecuta tests. Si en una demo futura fallan por wiring temporal del scaffold, la alternativa pragmática sería separar un job de empaquetado con `-x test`, pero no se deja activo por defecto para no ocultar regresiones.
+- App Runner exige un health endpoint HTTP. Para soportarlo se agregó `spring-boot-starter-web`, `spring-boot-starter-actuator` y la exposición de `/actuator/health`.
 
 ---
 
