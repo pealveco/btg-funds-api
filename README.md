@@ -1,47 +1,241 @@
-# Proyecto Base Implementando Clean Architecture
+# BTG Funds API
 
-## Antes de Iniciar
+API REST para la gestión de fondos de inversión, desarrollada como solución para la prueba técnica de Backend.
+Permite a los clientes suscribirse a fondos, cancelar suscripciones y consultar su historial de transacciones.
 
-Empezaremos por explicar los diferentes componentes del proyectos y partiremos de los componentes externos, continuando con los componentes core de negocio (dominio) y por último el inicio y configuración de la aplicación.
+---
 
-Lee el artículo [Clean Architecture — Aislando los detalles](https://medium.com/bancolombia-tech/clean-architecture-aislando-los-detalles-4f9530f35d7a)
+## 📌 Descripción del problema
 
-# Arquitectura
+Se requiere construir una plataforma que permita a los clientes gestionar sus fondos de inversión sin necesidad de intervención de un asesor.
 
-![Clean Architecture](https://miro.medium.com/max/1400/1*ZdlHz8B0-qu9Y-QO3AXR_w.png)
+### Funcionalidades principales:
+- Suscribirse a un fondo
+- Cancelar una suscripción
+- Consultar historial de transacciones
+- Recibir notificaciones (email o SMS)
 
-## Domain
+### Reglas de negocio:
+- Saldo inicial del cliente: **COP $500.000**
+- Cada fondo tiene un monto mínimo de vinculación
+- Cada transacción tiene un identificador único
+- Al cancelar una suscripción, el saldo se reintegra
+- Si no hay saldo suficiente, se debe informar al usuario
 
-Es el módulo más interno de la arquitectura, pertenece a la capa del dominio y encapsula la lógica y reglas del negocio mediante modelos y entidades del dominio.
+---
 
-## Usecases
+## 🏗️ Arquitectura
 
-Este módulo gradle perteneciente a la capa del dominio, implementa los casos de uso del sistema, define lógica de aplicación y reacciona a las invocaciones desde el módulo de entry points, orquestando los flujos hacia el módulo de entities.
+El proyecto está basado en **Clean Architecture (Hexagonal)**, lo que permite separar claramente la lógica de negocio de la infraestructura.
 
-## Infrastructure
+### Estructura del proyecto:
 
-### Helpers
+```
+├── domain            # Entidades y contratos del negocio
+├── usecase          # Casos de uso (lógica de aplicación)
+├── entry-points     # API REST (controladores)
+├── driven-adapters  # Persistencia, notificaciones, etc.
+```
 
-En el apartado de helpers tendremos utilidades generales para los Driven Adapters y Entry Points.
+### Principios aplicados:
+- Separación de responsabilidades
+- Inversión de dependencias
+- Código desacoplado de frameworks
+- Testabilidad
 
-Estas utilidades no están arraigadas a objetos concretos, se realiza el uso de generics para modelar comportamientos
-genéricos de los diferentes objetos de persistencia que puedan existir, este tipo de implementaciones se realizan
-basadas en el patrón de diseño [Unit of Work y Repository](https://medium.com/@krzychukosobudzki/repository-design-pattern-bc490b256006)
+---
 
-Estas clases no puede existir solas y debe heredarse su compartimiento en los **Driven Adapters**
+## 🧠 Modelo de dominio
 
-### Driven Adapters
+### Entidades principales:
+- **Client**
+- **Fund**
+- **Subscription**
+- **Transaction**
 
-Los driven adapter representan implementaciones externas a nuestro sistema, como lo son conexiones a servicios rest,
-soap, bases de datos, lectura de archivos planos, y en concreto cualquier origen y fuente de datos con la que debamos
-interactuar.
+### Enumeraciones:
+- `TransactionType` (SUBSCRIPTION, CANCELLATION)
+- `NotificationChannel` (EMAIL, SMS)
 
-### Entry Points
+---
 
-Los entry points representan los puntos de entrada de la aplicación o el inicio de los flujos de negocio.
+## 🗄️ Modelo de datos (NoSQL)
 
-## Application
+Se propone un modelo basado en documentos (DynamoDB o equivalente), optimizado para consultas por cliente.
 
-Este módulo es el más externo de la arquitectura, es el encargado de ensamblar los distintos módulos, resolver las dependencias y crear los beans de los casos de use (UseCases) de forma automática, inyectando en éstos instancias concretas de las dependencias declaradas. Además inicia la aplicación (es el único módulo del proyecto donde encontraremos la función “public static void main(String[] args)”.
+### Colecciones:
 
-**Los beans de los casos de uso se disponibilizan automaticamente gracias a un '@ComponentScan' ubicado en esta capa.**
+#### clients
+- clientId
+- name
+- email
+- phone
+- notificationPreference
+- availableBalance
+
+#### funds
+- fundId
+- name
+- minimumAmount
+- category
+
+#### subscriptions
+- subscriptionId
+- clientId
+- fundId
+- amount
+- status
+- createdAt
+- cancelledAt
+
+#### transactions
+- transactionId
+- clientId
+- fundId
+- type
+- amount
+- createdAt
+
+---
+
+## 🚀 API REST
+
+### Endpoints principales:
+
+#### Suscribirse a un fondo
+```
+POST /api/v1/funds/subscriptions
+```
+
+#### Cancelar suscripción
+```
+POST /api/v1/funds/subscriptions/{subscriptionId}/cancel
+```
+
+#### Consultar historial de transacciones
+```
+GET /api/v1/clients/{clientId}/transactions
+```
+
+#### Listar fondos disponibles
+```
+GET /api/v1/funds
+```
+
+---
+
+## ⚙️ Manejo de errores
+
+Se implementa un manejo centralizado de excepciones:
+
+Ejemplo de respuesta:
+
+```json
+{
+  "code": "INSUFFICIENT_BALANCE",
+  "message": "No tiene saldo disponible para vincularse al fondo",
+  "timestamp": "2025-06-20T10:00:00"
+}
+```
+
+---
+
+## 🔔 Notificaciones
+
+El sistema envía notificaciones al cliente al momento de suscribirse a un fondo:
+
+- Email
+- SMS
+
+La implementación se abstrae mediante un `NotificationGateway`, permitiendo cambiar fácilmente el proveedor.
+
+---
+
+## 🔐 Seguridad
+
+Se define una estrategia basada en:
+
+- Autenticación mediante JWT
+- Autorización por roles (CLIENT)
+- Encriptación en tránsito (HTTPS)
+- Encriptación en reposo (AWS DynamoDB)
+
+> Nota: Para esta prueba, se puede simular el esquema de autenticación.
+
+---
+
+## 🧪 Pruebas
+
+Se incluyen pruebas unitarias enfocadas en los casos de uso principales:
+
+- Suscripción exitosa
+- Validación de saldo insuficiente
+- Cancelación de suscripción
+- Consulta de historial
+
+---
+
+## 🧩 SQL (Parte 2)
+
+Se incluye la solución a la consulta SQL solicitada en:
+
+```
+/sql/solution.sql
+```
+
+---
+
+## ▶️ Cómo ejecutar el proyecto
+
+### Requisitos:
+- Java 17
+- Gradle
+
+### Ejecutar:
+```bash
+./gradlew bootRun
+```
+
+---
+
+## 🧪 Ejecutar pruebas
+
+```bash
+./gradlew test
+```
+
+---
+
+## ☁️ Despliegue
+
+El proyecto está diseñado para ser desplegado en AWS utilizando:
+
+- AWS CloudFormation
+- DynamoDB
+- API Gateway (opcional)
+- Lambda o ECS (opcional)
+
+---
+
+## 📌 Decisiones técnicas
+
+- Uso de Clean Architecture para desacoplar lógica de negocio
+- Modelo NoSQL orientado a acceso por cliente
+- Separación de capas para facilitar testabilidad
+- Uso de DTOs para desacoplar API del dominio
+
+---
+
+## 🚀 Mejoras futuras
+
+- Implementación completa de seguridad con JWT
+- Integración real con servicios de email/SMS
+- Uso de eventos (event-driven architecture)
+- Implementación de CQRS
+- Observabilidad (logs, métricas, tracing)
+
+---
+
+## 👨‍💻 Autor
+
+Desarrollado por **Piter Velasquez**
