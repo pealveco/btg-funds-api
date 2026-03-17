@@ -340,3 +340,4 @@ build-cache/
 .env
 .env.*
 !.env.example
+funds.env
