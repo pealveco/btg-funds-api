@@ -3,12 +3,12 @@ package co.com.pactual.dynamodb.config;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Profile;
-import software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider;
-import software.amazon.awssdk.auth.credentials.WebIdentityTokenFileCredentialsProvider;
+import org.springframework.util.StringUtils;
+import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.enhanced.dynamodb.DynamoDbEnhancedClient;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
+import software.amazon.awssdk.services.dynamodb.DynamoDbClientBuilder;
 
 import java.net.URI;
 
@@ -16,23 +16,19 @@ import java.net.URI;
 public class DynamoDBConfig {
 
     @Bean
-    @Profile({"local"})
-    public DynamoDbClient amazonDynamoDBLocal(@Value("${aws.region}") String region,
-                                         @Value("${aws.dynamodb.endpoint}") String endpoint) {
-        return DynamoDbClient.builder()
-                .credentialsProvider(ProfileCredentialsProvider.create("default"))
+    public DynamoDbClient dynamoDbClient(
+            @Value("${aws.region}") String region,
+            @Value("${aws.dynamodb.endpoint:}") String endpoint
+    ) {
+        DynamoDbClientBuilder builder = DynamoDbClient.builder()
                 .region(Region.of(region))
-                .endpointOverride(URI.create(endpoint))
-                .build();
-    }
+                .credentialsProvider(DefaultCredentialsProvider.create());
 
-    @Bean
-    @Profile({"dev", "cer", "pdn"})
-    public DynamoDbClient amazonDynamoDB(@Value("${aws.region}") String region) {
-        return DynamoDbClient.builder()
-                .credentialsProvider(WebIdentityTokenFileCredentialsProvider.create())
-                .region(Region.of(region))
-                .build();
+        if (StringUtils.hasText(endpoint)) {
+            builder.endpointOverride(URI.create(endpoint));
+        }
+
+        return builder.build();
     }
 
     @Bean
@@ -41,5 +37,4 @@ public class DynamoDBConfig {
                 .dynamoDbClient(client)
                 .build();
     }
-
 }
