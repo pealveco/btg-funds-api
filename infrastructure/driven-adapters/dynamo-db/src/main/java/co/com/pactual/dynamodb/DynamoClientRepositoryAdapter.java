@@ -5,6 +5,7 @@ import co.com.pactual.model.enums.SubscriptionStatus;
 import co.com.pactual.model.subscription.Subscription;
 import co.com.pactual.model.subscription.gateways.SubscriptionRepository;
 import org.reactivecommons.utils.ObjectMapper;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Repository;
 import software.amazon.awssdk.enhanced.dynamodb.DynamoDbEnhancedClient;
 import software.amazon.awssdk.enhanced.dynamodb.Key;
@@ -17,13 +18,12 @@ import java.util.Optional;
 @Repository
 public class DynamoClientRepositoryAdapter extends TemplateAdapterOperations<Subscription, String, SubscriptionEntity> implements SubscriptionRepository {
 
-    public DynamoClientRepositoryAdapter(DynamoDbEnhancedClient connectionFactory, ObjectMapper mapper) {
-        /**
-         *  Could be use mapper.mapBuilder if your domain model implement builder pattern
-         *  super(repository, mapper, d -> mapper.mapBuilder(d,ObjectModel.ObjectModelBuilder.class).build());
-         *  Or using mapper.map with the class of the object model
-         */
-        super(connectionFactory, mapper, d -> mapper.map(d, Subscription.class), "subscriptions");
+    public DynamoClientRepositoryAdapter(
+            DynamoDbEnhancedClient connectionFactory,
+            ObjectMapper mapper,
+            @Value("${adapters.dynamodb.tables.subscriptions}") String tableName
+    ) {
+        super(connectionFactory, mapper, DynamoClientRepositoryAdapter::toDomain, tableName, "clientId-index");
     }
 
     public List<Subscription> getEntityBySomeKeys(String partitionKey, String sortKey) {
@@ -45,7 +45,7 @@ public class DynamoClientRepositoryAdapter extends TemplateAdapterOperations<Sub
 
     @Override
     public Optional<Subscription> findById(String subscriptionId) {
-        return Optional.empty();
+        return Optional.ofNullable(getById(subscriptionId));
     }
 
     @Override
@@ -58,25 +58,40 @@ public class DynamoClientRepositoryAdapter extends TemplateAdapterOperations<Sub
                 )
                 .build();
 
-        return query(query);
+        return queryByIndex(query, "clientId-index");
     }
 
     @Override
     public Optional<Subscription> findActiveByClientAndFund(String clientId, String fundId) {
-        QueryEnhancedRequest query = QueryEnhancedRequest.builder()
-                .queryConditional(
-                        QueryConditional.keyEqualTo(
-                                Key.builder()
-                                        .partitionValue(clientId)
-                                        .sortValue(fundId)
-                                        .build()
-                        )
-                )
-                .build();
-
-        return queryByIndex(query, "gsi_client_fund")
+        return findByClientId(clientId)
                 .stream()
+                .filter(sub -> fundId.equals(sub.getFundId()))
                 .filter(sub -> sub.getStatus().equals(SubscriptionStatus.ACTIVE))
                 .findFirst();
+    }
+
+    @Override
+    protected SubscriptionEntity toEntity(Subscription model) {
+        SubscriptionEntity entity = new SubscriptionEntity();
+        entity.setSubscriptionId(model.getSubscriptionId());
+        entity.setClientId(model.getClientId());
+        entity.setFundId(model.getFundId());
+        entity.setAmount(model.getAmount());
+        entity.setStatus(model.getStatus() != null ? model.getStatus().name() : null);
+        entity.setCreatedAt(model.getCreatedAt());
+        entity.setCancelledAt(model.getCancelledAt());
+        return entity;
+    }
+
+    private static Subscription toDomain(SubscriptionEntity entity) {
+        return Subscription.builder()
+                .subscriptionId(entity.getSubscriptionId())
+                .clientId(entity.getClientId())
+                .fundId(entity.getFundId())
+                .amount(entity.getAmount())
+                .status(entity.getStatus() != null ? SubscriptionStatus.valueOf(entity.getStatus()) : null)
+                .createdAt(entity.getCreatedAt())
+                .cancelledAt(entity.getCancelledAt())
+                .build();
     }
 }
