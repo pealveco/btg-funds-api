@@ -204,21 +204,38 @@ SPRING_PROFILES_INCLUDE
 
 Notas:
 
+- `.env.example` define la estructura esperada del archivo de variables, sin valores reales hardcodeados.
+- para trabajar en local, crea tu archivo local a partir de esa plantilla y completalo con los valores de tu entorno
 - `DYNAMODB_ENDPOINT` es opcional. Si esta vacio, usa DynamoDB real en AWS.
 - `funds.env` es solo para entorno local y no se versiona.
+
+Ejemplo de preparacion local:
+
+```bash
+cp .env.example funds.env
+```
+
+Luego completa `funds.env` con:
+
+- region AWS
+- nombres de tablas DynamoDB
+- ARN del topic SNS
+- puerto y nombre de aplicacion si los necesitas ajustar
 
 ## ▶️ Ejecucion local
 
 ### 1. Clonar repositorio
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/pealveco/btg-funds-api
 cd btg-funds-api
 ```
 
 ### 2. Cargar variables locales
 
 ```bash
+cp .env.example funds.env
+# editar funds.env con tus valores
 set -a
 source funds.env
 set +a
