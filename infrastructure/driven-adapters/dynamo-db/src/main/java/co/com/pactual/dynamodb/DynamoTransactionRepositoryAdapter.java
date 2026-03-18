@@ -37,6 +37,7 @@ public class DynamoTransactionRepositoryAdapter extends TemplateAdapterOperation
     protected TransactionEntity toEntity(Transaction model) {
         TransactionEntity entity = new TransactionEntity();
         entity.setTransactionId(model.getTransactionId());
+        entity.setSubscriptionId(model.getSubscriptionId());
         entity.setClientId(model.getClientId());
         entity.setFundId(model.getFundId());
         entity.setType(model.getType() != null ? model.getType().name() : null);
@@ -48,6 +49,7 @@ public class DynamoTransactionRepositoryAdapter extends TemplateAdapterOperation
     private static Transaction toDomain(TransactionEntity entity) {
         return Transaction.builder()
                 .transactionId(entity.getTransactionId())
+                .subscriptionId(entity.getSubscriptionId())
                 .clientId(entity.getClientId())
                 .fundId(entity.getFundId())
                 .type(entity.getType() != null ? co.com.pactual.model.enums.TransactionType.valueOf(entity.getType()) : null)

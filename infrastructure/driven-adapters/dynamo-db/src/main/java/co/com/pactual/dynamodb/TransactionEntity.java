@@ -13,6 +13,7 @@ import java.time.LocalDateTime;
 public class TransactionEntity {
 
     private String transactionId;
+    private String subscriptionId;
     private String clientId;
     private String fundId;
     private String type;
@@ -27,6 +28,15 @@ public class TransactionEntity {
 
     public void setTransactionId(String transactionId) {
         this.transactionId = transactionId;
+    }
+
+    @DynamoDbAttribute("subscriptionId")
+    public String getSubscriptionId() {
+        return subscriptionId;
+    }
+
+    public void setSubscriptionId(String subscriptionId) {
+        this.subscriptionId = subscriptionId;
     }
 
     @DynamoDbSecondaryPartitionKey(indexNames = "clientId-createdAt-index")

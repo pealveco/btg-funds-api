@@ -9,7 +9,6 @@ import co.com.pactual.usecase.subscribefund.exception.MinimumSubscriptionAmountE
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.MediaType;
@@ -22,6 +21,7 @@ import java.time.LocalDateTime;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
+import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -31,14 +31,16 @@ class SubscriptionControllerTest {
 
     @Mock
     private SubscribeFundUseCase subscribeFundUseCase;
+    @Mock
+    private co.com.pactual.usecase.cancelsubscription.CancelSubscriptionUseCase cancelSubscriptionUseCase;
 
-    @InjectMocks
     private SubscriptionController subscriptionController;
 
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
+        subscriptionController = new SubscriptionController(subscribeFundUseCase, cancelSubscriptionUseCase);
         mockMvc = MockMvcBuilders.standaloneSetup(subscriptionController)
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
@@ -108,5 +110,38 @@ class SubscriptionControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.message").value("El monto de la suscripcion no cumple el minimo del fondo FPV_TEST"));
+    }
+
+    @Test
+    void shouldReturnBadRequestWhenPayloadHasMissingFields() throws Exception {
+        mockMvc.perform(post("/subscriptions")
+                        .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                                {
+                                  "clientId": "",
+                                  "amount": null
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.message", containsString("clientId: clientId is required")))
+                .andExpect(jsonPath("$.message", containsString("fundId: fundId is required")))
+                .andExpect(jsonPath("$.message", containsString("amount: amount is required")));
+    }
+
+    @Test
+    void shouldReturnBadRequestWhenAmountIsNotPositive() throws Exception {
+        mockMvc.perform(post("/subscriptions")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "clientId": "client-001",
+                                  "fundId": "fund-001",
+                                  "amount": 0
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.message").value("amount: amount must be greater than zero"));
     }
 }
