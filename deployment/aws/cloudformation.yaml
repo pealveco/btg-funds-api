@@ -338,9 +338,11 @@ Resources:
     Type: Custom::SeedFunds
     DependsOn:
       - FundsTable
+      - ClientsTable
       - SeedFundsFunction
     Properties:
       ServiceToken: !GetAtt SeedFundsFunction.Arn
+      SeedVersion: v2
 
   AppRunnerService:
     Type: AWS::AppRunner::Service
