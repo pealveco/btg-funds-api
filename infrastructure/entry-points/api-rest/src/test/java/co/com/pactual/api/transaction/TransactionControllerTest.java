@@ -58,6 +58,7 @@ class TransactionControllerTest {
     void shouldReturnBadRequestWhenClientIdIsMissing() throws Exception {
         mockMvc.perform(get("/transactions"))
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("REQUEST_VALIDATION_ERROR"))
                 .andExpect(jsonPath("$.message").value("clientId is required"));
     }
 
@@ -65,6 +66,7 @@ class TransactionControllerTest {
     void shouldReturnBadRequestWhenClientIdIsBlank() throws Exception {
         mockMvc.perform(get("/transactions").param("clientId", " "))
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
                 .andExpect(jsonPath("$.message").value("clientId is required"));
     }
 
@@ -75,6 +77,7 @@ class TransactionControllerTest {
 
         mockMvc.perform(get("/transactions").param("clientId", "client-001"))
                 .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.code").value("TRANSACTION_HISTORY_RETRIEVAL_ERROR"))
                 .andExpect(jsonPath("$.message").value("Could not retrieve transaction history"));
     }
 

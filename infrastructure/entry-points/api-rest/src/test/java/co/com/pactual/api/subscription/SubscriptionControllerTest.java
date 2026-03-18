@@ -81,6 +81,7 @@ class SubscriptionControllerTest {
                 .thenThrow(new ClientNotFoundException("client-001"));
 
         mockMvc.perform(post("/subscriptions")
+                        .header("X-Correlation-Id", "corr-sub-404")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -90,7 +91,9 @@ class SubscriptionControllerTest {
                                 }
                                 """))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.status").value(404));
+                .andExpect(jsonPath("$.code").value("CLIENT_NOT_FOUND"))
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.correlationId").value("corr-sub-404"));
     }
 
     @Test
@@ -115,6 +118,7 @@ class SubscriptionControllerTest {
     @Test
     void shouldReturnBadRequestWhenPayloadHasMissingFields() throws Exception {
         mockMvc.perform(post("/subscriptions")
+                        .header("X-Correlation-Id", "corr-validation-001")
                         .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                                 {
@@ -123,10 +127,12 @@ class SubscriptionControllerTest {
                                 }
                                 """))
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("REQUEST_VALIDATION_ERROR"))
                 .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.message", containsString("clientId: clientId is required")))
                 .andExpect(jsonPath("$.message", containsString("fundId: fundId is required")))
-                .andExpect(jsonPath("$.message", containsString("amount: amount is required")));
+                .andExpect(jsonPath("$.message", containsString("amount: amount is required")))
+                .andExpect(jsonPath("$.correlationId").value("corr-validation-001"));
     }
 
     @Test

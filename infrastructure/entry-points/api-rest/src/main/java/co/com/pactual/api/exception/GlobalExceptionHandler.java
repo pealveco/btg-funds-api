@@ -1,5 +1,6 @@
 package co.com.pactual.api.exception;
 
+import co.com.pactual.api.config.CorrelationIdFilter;
 import co.com.pactual.usecase.getfunds.exception.FundsRetrievalException;
 import co.com.pactual.usecase.gettransactionhistory.exception.TransactionHistoryRetrievalException;
 import co.com.pactual.usecase.cancelsubscription.exception.SubscriptionAlreadyCancelledException;
@@ -23,8 +24,10 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @RestControllerAdvice
@@ -38,7 +41,7 @@ public class GlobalExceptionHandler {
             HttpServletRequest request
     ) {
         logWarn(exception, request, HttpStatus.BAD_REQUEST);
-        return buildResponse(HttpStatus.BAD_REQUEST, exception.getMessage(), request);
+        return buildResponse(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", exception.getMessage(), request);
     }
 
     @ExceptionHandler(ClientNotFoundException.class)
@@ -47,7 +50,7 @@ public class GlobalExceptionHandler {
             HttpServletRequest request
     ) {
         logWarn(exception, request, HttpStatus.NOT_FOUND);
-        return buildResponse(HttpStatus.NOT_FOUND, exception.getMessage(), request);
+        return buildResponse(HttpStatus.NOT_FOUND, "CLIENT_NOT_FOUND", exception.getMessage(), request);
     }
 
     @ExceptionHandler(FundNotFoundException.class)
@@ -56,7 +59,7 @@ public class GlobalExceptionHandler {
             HttpServletRequest request
     ) {
         logWarn(exception, request, HttpStatus.NOT_FOUND);
-        return buildResponse(HttpStatus.NOT_FOUND, exception.getMessage(), request);
+        return buildResponse(HttpStatus.NOT_FOUND, "FUND_NOT_FOUND", exception.getMessage(), request);
     }
 
     @ExceptionHandler(InsufficientBalanceException.class)
@@ -65,7 +68,7 @@ public class GlobalExceptionHandler {
             HttpServletRequest request
     ) {
         logWarn(exception, request, HttpStatus.BAD_REQUEST);
-        return buildResponse(HttpStatus.BAD_REQUEST, exception.getMessage(), request);
+        return buildResponse(HttpStatus.BAD_REQUEST, "INSUFFICIENT_BALANCE", exception.getMessage(), request);
     }
 
     @ExceptionHandler(ActiveSubscriptionAlreadyExistsException.class)
@@ -74,7 +77,7 @@ public class GlobalExceptionHandler {
             HttpServletRequest request
     ) {
         logWarn(exception, request, HttpStatus.CONFLICT);
-        return buildResponse(HttpStatus.CONFLICT, exception.getMessage(), request);
+        return buildResponse(HttpStatus.CONFLICT, "ACTIVE_SUBSCRIPTION_ALREADY_EXISTS", exception.getMessage(), request);
     }
 
     @ExceptionHandler(SubscriptionNotFoundException.class)
@@ -83,7 +86,7 @@ public class GlobalExceptionHandler {
             HttpServletRequest request
     ) {
         logWarn(exception, request, HttpStatus.NOT_FOUND);
-        return buildResponse(HttpStatus.NOT_FOUND, exception.getMessage(), request);
+        return buildResponse(HttpStatus.NOT_FOUND, "SUBSCRIPTION_NOT_FOUND", exception.getMessage(), request);
     }
 
     @ExceptionHandler(SubscriptionAlreadyCancelledException.class)
@@ -92,7 +95,7 @@ public class GlobalExceptionHandler {
             HttpServletRequest request
     ) {
         logWarn(exception, request, HttpStatus.BAD_REQUEST);
-        return buildResponse(HttpStatus.BAD_REQUEST, exception.getMessage(), request);
+        return buildResponse(HttpStatus.BAD_REQUEST, "SUBSCRIPTION_ALREADY_CANCELLED", exception.getMessage(), request);
     }
 
     @ExceptionHandler(MinimumSubscriptionAmountException.class)
@@ -101,7 +104,7 @@ public class GlobalExceptionHandler {
             HttpServletRequest request
     ) {
         logWarn(exception, request, HttpStatus.BAD_REQUEST);
-        return buildResponse(HttpStatus.BAD_REQUEST, exception.getMessage(), request);
+        return buildResponse(HttpStatus.BAD_REQUEST, "MINIMUM_SUBSCRIPTION_AMOUNT", exception.getMessage(), request);
     }
 
     @ExceptionHandler(FundsRetrievalException.class)
@@ -110,7 +113,7 @@ public class GlobalExceptionHandler {
             HttpServletRequest request
     ) {
         logError(exception, request, HttpStatus.INTERNAL_SERVER_ERROR);
-        return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, exception.getMessage(), request);
+        return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, "FUNDS_RETRIEVAL_ERROR", exception.getMessage(), request);
     }
 
     @ExceptionHandler(TransactionHistoryRetrievalException.class)
@@ -119,7 +122,7 @@ public class GlobalExceptionHandler {
             HttpServletRequest request
     ) {
         logError(exception, request, HttpStatus.INTERNAL_SERVER_ERROR);
-        return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, exception.getMessage(), request);
+        return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, "TRANSACTION_HISTORY_RETRIEVAL_ERROR", exception.getMessage(), request);
     }
 
     @ExceptionHandler(SubscriptionPersistenceException.class)
@@ -128,7 +131,7 @@ public class GlobalExceptionHandler {
             HttpServletRequest request
     ) {
         logError(exception, request, HttpStatus.INTERNAL_SERVER_ERROR);
-        return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, exception.getMessage(), request);
+        return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, "SUBSCRIPTION_PERSISTENCE_ERROR", exception.getMessage(), request);
     }
 
     @ExceptionHandler(SubscriptionCancellationPersistenceException.class)
@@ -137,7 +140,7 @@ public class GlobalExceptionHandler {
             HttpServletRequest request
     ) {
         logError(exception, request, HttpStatus.INTERNAL_SERVER_ERROR);
-        return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, exception.getMessage(), request);
+        return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, "SUBSCRIPTION_CANCELLATION_PERSISTENCE_ERROR", exception.getMessage(), request);
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
@@ -146,7 +149,7 @@ public class GlobalExceptionHandler {
             HttpServletRequest request
     ) {
         logWarn(exception, request, HttpStatus.BAD_REQUEST);
-        return buildResponse(HttpStatus.BAD_REQUEST, "Invalid request payload", request);
+        return buildResponse(HttpStatus.BAD_REQUEST, "INVALID_REQUEST_PAYLOAD", "Invalid request payload", request);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -161,7 +164,7 @@ public class GlobalExceptionHandler {
                 .collect(Collectors.joining(", "));
 
         logWarn(exception, request, HttpStatus.BAD_REQUEST, message);
-        return buildResponse(HttpStatus.BAD_REQUEST, message, request);
+        return buildResponse(HttpStatus.BAD_REQUEST, "REQUEST_VALIDATION_ERROR", message, request);
     }
 
     @ExceptionHandler(MissingServletRequestParameterException.class)
@@ -170,7 +173,7 @@ public class GlobalExceptionHandler {
             HttpServletRequest request
     ) {
         logWarn(exception, request, HttpStatus.BAD_REQUEST);
-        return buildResponse(HttpStatus.BAD_REQUEST, exception.getParameterName() + " is required", request);
+        return buildResponse(HttpStatus.BAD_REQUEST, "REQUEST_VALIDATION_ERROR", exception.getParameterName() + " is required", request);
     }
 
     @ExceptionHandler(HandlerMethodValidationException.class)
@@ -185,7 +188,7 @@ public class GlobalExceptionHandler {
                 .collect(Collectors.joining(", "));
 
         logWarn(exception, request, HttpStatus.BAD_REQUEST, message);
-        return buildResponse(HttpStatus.BAD_REQUEST, message, request);
+        return buildResponse(HttpStatus.BAD_REQUEST, "REQUEST_VALIDATION_ERROR", message, request);
     }
 
     @ExceptionHandler(Exception.class)
@@ -194,21 +197,24 @@ public class GlobalExceptionHandler {
             HttpServletRequest request
     ) {
         logError(exception, request, HttpStatus.INTERNAL_SERVER_ERROR);
-        return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Unexpected internal error", request);
+        return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "Unexpected internal error", request);
     }
 
     private ResponseEntity<ErrorResponse> buildResponse(
             HttpStatus status,
+            String code,
             String message,
             HttpServletRequest request
     ) {
         return ResponseEntity.status(status)
                 .body(ErrorResponse.builder()
+                        .code(code)
                         .timestamp(LocalDateTime.now())
                         .status(status.value())
                         .error(status.getReasonPhrase())
                         .message(message)
                         .path(request.getRequestURI())
+                        .correlationId(resolveCorrelationId(request))
                         .build());
     }
 
@@ -238,5 +244,19 @@ public class GlobalExceptionHandler {
                 status.value(),
                 exception
         );
+    }
+
+    private String resolveCorrelationId(HttpServletRequest request) {
+        String headerCorrelationId = request.getHeader(CorrelationIdFilter.CORRELATION_ID_HEADER);
+        if (headerCorrelationId != null && !headerCorrelationId.isBlank()) {
+            return headerCorrelationId.trim();
+        }
+
+        String mdcCorrelationId = MDC.get("correlationId");
+        if (mdcCorrelationId != null && !mdcCorrelationId.isBlank()) {
+            return mdcCorrelationId;
+        }
+
+        return UUID.randomUUID().toString();
     }
 }
