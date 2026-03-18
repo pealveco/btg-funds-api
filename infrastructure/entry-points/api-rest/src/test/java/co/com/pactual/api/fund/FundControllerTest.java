@@ -1,6 +1,8 @@
 package co.com.pactual.api.fund;
 
+import co.com.pactual.api.exception.GlobalExceptionHandler;
 import co.com.pactual.model.fund.Fund;
+import co.com.pactual.usecase.getfunds.exception.FundsRetrievalException;
 import co.com.pactual.usecase.getfunds.GetFundsUseCase;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -14,6 +16,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import java.math.BigDecimal;
 import java.util.List;
 
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -32,7 +35,9 @@ class FundControllerTest {
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(fundController).build();
+        mockMvc = MockMvcBuilders.standaloneSetup(fundController)
+                .setControllerAdvice(new GlobalExceptionHandler())
+                .build();
     }
 
     @Test
@@ -59,5 +64,19 @@ class FundControllerTest {
                 .andExpect(jsonPath("$[0].name").value("FPV_BTG_PACTUAL_RECAUDADORA"))
                 .andExpect(jsonPath("$[0].minimumAmount").value(75000))
                 .andExpect(jsonPath("$[0].category").value("FPV"));
+    }
+
+    @Test
+    void shouldReturnInternalServerErrorWhenFundsRetrievalFails() throws Exception {
+        doThrow(new FundsRetrievalException("Could not retrieve available funds", new RuntimeException("boom")))
+                .when(getFundsUseCase)
+                .execute();
+
+        mockMvc.perform(get("/funds"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.status").value(500))
+                .andExpect(jsonPath("$.error").value("Internal Server Error"))
+                .andExpect(jsonPath("$.message").value("Could not retrieve available funds"))
+                .andExpect(jsonPath("$.path").value("/funds"));
     }
 }
