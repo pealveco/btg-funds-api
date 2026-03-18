@@ -344,6 +344,12 @@ Resources:
                 Value: !Ref TransactionsTable
               - Name: NOTIFICATIONS_TOPIC_ARN
                 Value: !Ref NotificationsTopic
+              - Name: SPRING_PROFILES_ACTIVE
+                Value: dev
+              - Name: SPRING_APPLICATION_NAME
+                Value: BtgPactualFundsApi
+              - Name: DYNAMODB_ENDPOINT
+                Value: ""
       InstanceConfiguration:
         Cpu: 1 vCPU
         Memory: 2 GB

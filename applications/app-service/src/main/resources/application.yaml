@@ -1,12 +1,12 @@
 server:
-  port: ${SERVER_PORT}
+  port: ${SERVER_PORT:8080}
 spring:
   application:
-    name: ${SPRING_APPLICATION_NAME}
+    name: ${SPRING_APPLICATION_NAME:BtgPactualFundsApi}
   devtools:
     add-properties: false
   profiles:
-    include: ${SPRING_PROFILES_INCLUDE}
+    include: ${SPRING_PROFILES_INCLUDE:}
 management:
   endpoints:
     web:
@@ -19,7 +19,7 @@ management:
 aws:
   region: ${AWS_REGION}
   dynamodb:
-    endpoint: ${DYNAMODB_ENDPOINT}
+    endpoint: ${DYNAMODB_ENDPOINT:}
   sns:
     topic-arn: ${NOTIFICATIONS_TOPIC_ARN}
 adapters:
