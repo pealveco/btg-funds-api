@@ -2,6 +2,7 @@ package co.com.pactual.notifications;
 
 import co.com.pactual.model.enums.NotificationChannel;
 import co.com.pactual.model.notification.NotificationEvent;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.services.sns.SnsClient;
@@ -69,6 +70,23 @@ class NotificationAdapterTest {
         adapter.publish(buildEvent("SUBSCRIPTION_CANCELLED"));
 
         verify(snsClient).publish(any(PublishRequest.class));
+    }
+
+    @Test
+    void shouldNotPublishWhenSerializationFails() throws Exception {
+        SnsClient snsClient = mock(SnsClient.class);
+        ObjectMapper objectMapper = mock(ObjectMapper.class);
+        when(objectMapper.writeValueAsString(any(NotificationEvent.class))).thenThrow(new JsonProcessingException("boom") {
+        });
+        NotificationAdapter adapter = new NotificationAdapter(
+                snsClient,
+                objectMapper,
+                "arn:aws:sns:us-east-1:123456789012:btg-funds-api-dev-notifications"
+        );
+
+        adapter.publish(buildEvent("SUBSCRIPTION_CREATED"));
+
+        verify(snsClient, never()).publish(any(PublishRequest.class));
     }
 
     private NotificationEvent buildEvent(String eventType) {

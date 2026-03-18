@@ -2,6 +2,7 @@ package co.com.pactual.usecase.getfunds;
 
 import co.com.pactual.model.fund.Fund;
 import co.com.pactual.model.fund.gateways.FundRepository;
+import co.com.pactual.usecase.getfunds.exception.FundsRetrievalException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -12,6 +13,7 @@ import java.math.BigDecimal;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -46,6 +48,16 @@ class GetFundsUseCaseTest {
         List<Fund> funds = useCase.execute();
 
         assertEquals(expectedFunds, funds);
+        verify(fundRepository).findAll();
+    }
+
+    @Test
+    void shouldThrowFundsRetrievalExceptionWhenRepositoryFails() {
+        when(fundRepository.findAll()).thenThrow(new RuntimeException("boom"));
+
+        FundsRetrievalException exception = assertThrows(FundsRetrievalException.class, () -> useCase.execute());
+
+        assertEquals("Could not retrieve available funds", exception.getMessage());
         verify(fundRepository).findAll();
     }
 }
