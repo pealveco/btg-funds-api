@@ -23,6 +23,27 @@ Permite:
   - App Runner
   - CloudFormation
 
+## 🗂️ Entregables
+
+Este repositorio contiene dos entregables distintos:
+
+- Parte 1: solucion backend en Java + Spring Boot + DynamoDB + Clean Architecture
+- Parte 2: ejercicio SQL independiente en [sql/parte-2/README.md](/home/certhakzu/Documentos/Ceiba/tecnical%20test/btg-funds-api/sql/parte-2/README.md)
+
+La Parte 2 no reutiliza ni depende de la persistencia NoSQL de la Parte 1; convive en el mismo repositorio solo por organizacion del entregable tecnico.
+
+## 📌 Parte 2 – SQL
+
+La solucion de la seccion SQL de la prueba tecnica esta en la ruta [sql/parte-2/](/home/certhakzu/Documentos/Ceiba/tecnical%20test/btg-funds-api/sql/parte-2).
+
+Accesos directos:
+
+- Documentacion: [sql/parte-2/README.md](/home/certhakzu/Documentos/Ceiba/tecnical%20test/btg-funds-api/sql/parte-2/README.md)
+- Consulta final: [sql/parte-2/solution.sql](/home/certhakzu/Documentos/Ceiba/tecnical%20test/btg-funds-api/sql/parte-2/solution.sql)
+- Analisis: [sql/parte-2/analysis.md](/home/certhakzu/Documentos/Ceiba/tecnical%20test/btg-funds-api/sql/parte-2/analysis.md)
+
+Esta parte es completamente independiente de la implementacion backend.
+
 ## 🧱 Arquitectura
 
 El proyecto sigue Clean Architecture, separando responsabilidades por capas:
