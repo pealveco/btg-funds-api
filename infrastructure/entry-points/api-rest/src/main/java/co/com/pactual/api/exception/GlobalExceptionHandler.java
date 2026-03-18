@@ -21,6 +21,8 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.LocalDateTime;
 import java.util.stream.Collectors;
@@ -28,11 +30,14 @@ import java.util.stream.Collectors;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
     @ExceptionHandler(InvalidRequestException.class)
     public ResponseEntity<ErrorResponse> handleInvalidRequest(
             InvalidRequestException exception,
             HttpServletRequest request
     ) {
+        logWarn(exception, request, HttpStatus.BAD_REQUEST);
         return buildResponse(HttpStatus.BAD_REQUEST, exception.getMessage(), request);
     }
 
@@ -41,6 +46,7 @@ public class GlobalExceptionHandler {
             ClientNotFoundException exception,
             HttpServletRequest request
     ) {
+        logWarn(exception, request, HttpStatus.NOT_FOUND);
         return buildResponse(HttpStatus.NOT_FOUND, exception.getMessage(), request);
     }
 
@@ -49,6 +55,7 @@ public class GlobalExceptionHandler {
             FundNotFoundException exception,
             HttpServletRequest request
     ) {
+        logWarn(exception, request, HttpStatus.NOT_FOUND);
         return buildResponse(HttpStatus.NOT_FOUND, exception.getMessage(), request);
     }
 
@@ -57,6 +64,7 @@ public class GlobalExceptionHandler {
             InsufficientBalanceException exception,
             HttpServletRequest request
     ) {
+        logWarn(exception, request, HttpStatus.BAD_REQUEST);
         return buildResponse(HttpStatus.BAD_REQUEST, exception.getMessage(), request);
     }
 
@@ -65,6 +73,7 @@ public class GlobalExceptionHandler {
             ActiveSubscriptionAlreadyExistsException exception,
             HttpServletRequest request
     ) {
+        logWarn(exception, request, HttpStatus.CONFLICT);
         return buildResponse(HttpStatus.CONFLICT, exception.getMessage(), request);
     }
 
@@ -73,6 +82,7 @@ public class GlobalExceptionHandler {
             SubscriptionNotFoundException exception,
             HttpServletRequest request
     ) {
+        logWarn(exception, request, HttpStatus.NOT_FOUND);
         return buildResponse(HttpStatus.NOT_FOUND, exception.getMessage(), request);
     }
 
@@ -81,6 +91,7 @@ public class GlobalExceptionHandler {
             SubscriptionAlreadyCancelledException exception,
             HttpServletRequest request
     ) {
+        logWarn(exception, request, HttpStatus.BAD_REQUEST);
         return buildResponse(HttpStatus.BAD_REQUEST, exception.getMessage(), request);
     }
 
@@ -89,6 +100,7 @@ public class GlobalExceptionHandler {
             MinimumSubscriptionAmountException exception,
             HttpServletRequest request
     ) {
+        logWarn(exception, request, HttpStatus.BAD_REQUEST);
         return buildResponse(HttpStatus.BAD_REQUEST, exception.getMessage(), request);
     }
 
@@ -97,6 +109,7 @@ public class GlobalExceptionHandler {
             FundsRetrievalException exception,
             HttpServletRequest request
     ) {
+        logError(exception, request, HttpStatus.INTERNAL_SERVER_ERROR);
         return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, exception.getMessage(), request);
     }
 
@@ -105,6 +118,7 @@ public class GlobalExceptionHandler {
             TransactionHistoryRetrievalException exception,
             HttpServletRequest request
     ) {
+        logError(exception, request, HttpStatus.INTERNAL_SERVER_ERROR);
         return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, exception.getMessage(), request);
     }
 
@@ -113,6 +127,7 @@ public class GlobalExceptionHandler {
             SubscriptionPersistenceException exception,
             HttpServletRequest request
     ) {
+        logError(exception, request, HttpStatus.INTERNAL_SERVER_ERROR);
         return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, exception.getMessage(), request);
     }
 
@@ -121,6 +136,7 @@ public class GlobalExceptionHandler {
             SubscriptionCancellationPersistenceException exception,
             HttpServletRequest request
     ) {
+        logError(exception, request, HttpStatus.INTERNAL_SERVER_ERROR);
         return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, exception.getMessage(), request);
     }
 
@@ -129,6 +145,7 @@ public class GlobalExceptionHandler {
             HttpMessageNotReadableException exception,
             HttpServletRequest request
     ) {
+        logWarn(exception, request, HttpStatus.BAD_REQUEST);
         return buildResponse(HttpStatus.BAD_REQUEST, "Invalid request payload", request);
     }
 
@@ -143,6 +160,7 @@ public class GlobalExceptionHandler {
                 .map(this::formatFieldError)
                 .collect(Collectors.joining(", "));
 
+        logWarn(exception, request, HttpStatus.BAD_REQUEST, message);
         return buildResponse(HttpStatus.BAD_REQUEST, message, request);
     }
 
@@ -151,6 +169,7 @@ public class GlobalExceptionHandler {
             MissingServletRequestParameterException exception,
             HttpServletRequest request
     ) {
+        logWarn(exception, request, HttpStatus.BAD_REQUEST);
         return buildResponse(HttpStatus.BAD_REQUEST, exception.getParameterName() + " is required", request);
     }
 
@@ -165,6 +184,7 @@ public class GlobalExceptionHandler {
                 .map(error -> error.getDefaultMessage() != null ? error.getDefaultMessage() : "Invalid request parameter")
                 .collect(Collectors.joining(", "));
 
+        logWarn(exception, request, HttpStatus.BAD_REQUEST, message);
         return buildResponse(HttpStatus.BAD_REQUEST, message, request);
     }
 
@@ -173,6 +193,7 @@ public class GlobalExceptionHandler {
             Exception exception,
             HttpServletRequest request
     ) {
+        logError(exception, request, HttpStatus.INTERNAL_SERVER_ERROR);
         return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Unexpected internal error", request);
     }
 
@@ -193,5 +214,29 @@ public class GlobalExceptionHandler {
 
     private String formatFieldError(FieldError fieldError) {
         return fieldError.getField() + ": " + fieldError.getDefaultMessage();
+    }
+
+    private void logWarn(Exception exception, HttpServletRequest request, HttpStatus status) {
+        logWarn(exception, request, status, exception.getMessage());
+    }
+
+    private void logWarn(Exception exception, HttpServletRequest request, HttpStatus status, String message) {
+        LOGGER.warn(
+                "Handled request with controlled error. method={} path={} status={} message={}",
+                request.getMethod(),
+                request.getRequestURI(),
+                status.value(),
+                message
+        );
+    }
+
+    private void logError(Exception exception, HttpServletRequest request, HttpStatus status) {
+        LOGGER.error(
+                "Handled request with unexpected error. method={} path={} status={}",
+                request.getMethod(),
+                request.getRequestURI(),
+                status.value(),
+                exception
+        );
     }
 }

@@ -31,3 +31,6 @@ adapters:
       transactions: ${TRANSACTIONS_TABLE}
 cors:
   allowed-origins: http://localhost:4200,http://localhost:8080
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] [%X{correlationId}] %logger{36} - %msg%n"
