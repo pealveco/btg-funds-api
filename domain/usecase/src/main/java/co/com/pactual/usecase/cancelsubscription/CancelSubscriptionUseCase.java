@@ -2,8 +2,11 @@ package co.com.pactual.usecase.cancelsubscription;
 
 import co.com.pactual.model.client.Client;
 import co.com.pactual.model.client.gateways.ClientRepository;
+import co.com.pactual.model.enums.NotificationChannel;
 import co.com.pactual.model.enums.SubscriptionStatus;
 import co.com.pactual.model.enums.TransactionType;
+import co.com.pactual.model.gateways.NotificationGateway;
+import co.com.pactual.model.notification.NotificationEvent;
 import co.com.pactual.model.subscription.Subscription;
 import co.com.pactual.model.subscription.gateways.SubscriptionRepository;
 import co.com.pactual.model.transaction.Transaction;
@@ -25,6 +28,7 @@ public class CancelSubscriptionUseCase {
     private final SubscriptionRepository subscriptionRepository;
     private final TransactionRepository transactionRepository;
     private final ClientRepository clientRepository;
+    private final NotificationGateway notificationGateway;
 
     public void execute(String subscriptionId) {
         Subscription subscription = subscriptionRepository.findById(subscriptionId)
@@ -49,6 +53,7 @@ public class CancelSubscriptionUseCase {
                     .availableBalance(resolveBalance(client).add(subscription.getAmount()))
                     .build());
             transactionRepository.save(buildCancellationTransaction(subscription, now));
+            publishSubscriptionCancelledEvent(client, cancelledSubscription, now);
         } catch (RuntimeException exception) {
             throw new SubscriptionCancellationPersistenceException(exception);
         }
@@ -68,5 +73,28 @@ public class CancelSubscriptionUseCase {
 
     private java.math.BigDecimal resolveBalance(Client client) {
         return client.getAvailableBalance() != null ? client.getAvailableBalance() : DEFAULT_INITIAL_BALANCE;
+    }
+
+    private void publishSubscriptionCancelledEvent(Client client, Subscription subscription, LocalDateTime now) {
+        if (client.getNotificationPreference() == null) {
+            return;
+        }
+        NotificationChannel channel = client.getNotificationPreference();
+        String destination = NotificationChannel.SMS.equals(channel) ? client.getPhone() : client.getEmail();
+        try {
+            notificationGateway.publish(NotificationEvent.builder()
+                    .eventType("SUBSCRIPTION_CANCELLED")
+                    .subscriptionId(subscription.getSubscriptionId())
+                    .clientId(subscription.getClientId())
+                    .fundId(subscription.getFundId())
+                    .amount(subscription.getAmount())
+                    .timestamp(now)
+                    .status(subscription.getStatus().name())
+                    .channel(channel)
+                    .destination(destination)
+                    .build());
+        } catch (RuntimeException ignored) {
+            // Notifications are best-effort and should not fail the main flow.
+        }
     }
 }

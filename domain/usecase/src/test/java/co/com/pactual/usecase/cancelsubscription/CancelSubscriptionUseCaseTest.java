@@ -5,6 +5,8 @@ import co.com.pactual.model.client.gateways.ClientRepository;
 import co.com.pactual.model.enums.NotificationChannel;
 import co.com.pactual.model.enums.SubscriptionStatus;
 import co.com.pactual.model.enums.TransactionType;
+import co.com.pactual.model.gateways.NotificationGateway;
+import co.com.pactual.model.notification.NotificationEvent;
 import co.com.pactual.model.subscription.Subscription;
 import co.com.pactual.model.subscription.gateways.SubscriptionRepository;
 import co.com.pactual.model.transaction.Transaction;
@@ -43,6 +45,8 @@ class CancelSubscriptionUseCaseTest {
     private TransactionRepository transactionRepository;
     @Mock
     private ClientRepository clientRepository;
+    @Mock
+    private NotificationGateway notificationGateway;
 
     @InjectMocks
     private CancelSubscriptionUseCase useCase;
@@ -102,6 +106,12 @@ class CancelSubscriptionUseCaseTest {
         assertEquals(CLIENT_ID, transactionCaptor.getValue().getClientId());
         assertEquals(FUND_ID, transactionCaptor.getValue().getFundId());
         assertEquals(activeSubscription.getAmount(), transactionCaptor.getValue().getAmount());
+
+        ArgumentCaptor<NotificationEvent> eventCaptor = ArgumentCaptor.forClass(NotificationEvent.class);
+        verify(notificationGateway).publish(eventCaptor.capture());
+        assertEquals("SUBSCRIPTION_CANCELLED", eventCaptor.getValue().getEventType());
+        assertEquals(CLIENT_ID, eventCaptor.getValue().getClientId());
+        assertEquals(FUND_ID, eventCaptor.getValue().getFundId());
     }
 
     @Test

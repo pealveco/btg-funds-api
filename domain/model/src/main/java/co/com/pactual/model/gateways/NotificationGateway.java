@@ -1,7 +1,7 @@
 package co.com.pactual.model.gateways;
 
-import co.com.pactual.model.enums.NotificationChannel;
+import co.com.pactual.model.notification.NotificationEvent;
 
 public interface NotificationGateway {
-    void sendNotification(String destination, String message, NotificationChannel channel);
+    void publish(NotificationEvent event);
 }

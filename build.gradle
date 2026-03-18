@@ -17,11 +17,21 @@ plugins {
 
 sonar {
     def modules = subprojects.projectDir.collect { "${it.toString().replace(project.projectDir.toString() + "/", "")}" }
+    def coverageExclusions = [
+            "**/MainApplication.java",
+            "**/config/**",
+            "**/dto/**",
+            "**/mapper/**",
+            "**/exception/**",
+            "**/*Entity.java",
+            "**/helper/TemplateAdapterOperations.java"
+    ]
     properties {
         property "sonar.sourceEncoding", "UTF-8"
         property "sonar.modules", "${modules.join(',')}"
         property "sonar.sources", "src,deployment,settings.gradle,main.gradle,build.gradle,${modules.collect { "${it}/build.gradle" }.join(',')}"
-        property "sonar.exclusions","**/MainApplication.java"
+        property "sonar.exclusions", ""
+        property "sonar.coverage.exclusions", "${coverageExclusions.join(',')}"
         property "sonar.tests", "src/test"
         property "sonar.java.binaries", "**/build/classes/java/main"
         property "sonar.junit.reportsPath", "**/build/test-results/test"
