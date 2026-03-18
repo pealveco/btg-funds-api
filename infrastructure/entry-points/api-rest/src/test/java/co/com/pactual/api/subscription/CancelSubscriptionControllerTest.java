@@ -80,4 +80,12 @@ class CancelSubscriptionControllerTest {
 
         verify(cancelSubscriptionUseCase).execute("sub-001");
     }
+
+    @Test
+    void shouldReturnBadRequestWhenSubscriptionIdHasInvalidFormat() throws Exception {
+        mockMvc.perform(delete("/subscriptions/{subscriptionId}", "sub 001"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("REQUEST_VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.message").value("subscriptionId has an invalid format"));
+    }
 }

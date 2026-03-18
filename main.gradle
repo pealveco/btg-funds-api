@@ -6,6 +6,20 @@ allprojects {
     }
 }
 
+def jacocoCoverageExclusions = [
+        '**/MainApplication.class',
+        '**/co/com/pactual/model/**',
+        '**/dto/**',
+        '**/mapper/**',
+        '**/*Entity.class',
+        '**/helper/TemplateAdapterOperations.class',
+        '**/notifications/config/**',
+        '**/config/ObjectMapperConfig.class',
+        '**/config/UseCasesConfig.class',
+        '**/exception/*Exception.class',
+        '**/api/exception/ErrorResponse.class'
+]
+
 subprojects {
     apply plugin: 'java'
     apply plugin: 'jacoco'
@@ -60,12 +74,37 @@ tasks.register('jacocoMergedReport', JacocoReport) {
     dependsOn = [test, subprojects.jacocoTestReport]
     additionalSourceDirs.setFrom files(subprojects.sourceSets.main.allSource.srcDirs)
     sourceDirectories.setFrom files(subprojects.sourceSets.main.allSource.srcDirs)
-    classDirectories.setFrom files(subprojects.sourceSets.main.output)
+    classDirectories.setFrom files(subprojects.collect { subproject ->
+        subproject.sourceSets.main.output.asFileTree.matching {
+            exclude jacocoCoverageExclusions
+        }
+    })
     executionData.setFrom project.fileTree(dir: '.', include: '**/build/jacoco/test.exec')
     reports {
         xml.setRequired true
         csv.setRequired false
         html.setRequired true
+    }
+}
+
+tasks.register('jacocoMergedCoverageVerification', JacocoCoverageVerification) {
+    dependsOn tasks.named('jacocoMergedReport')
+    additionalSourceDirs.setFrom files(subprojects.sourceSets.main.allSource.srcDirs)
+    sourceDirectories.setFrom files(subprojects.sourceSets.main.allSource.srcDirs)
+    classDirectories.setFrom files(subprojects.collect { subproject ->
+        subproject.sourceSets.main.output.asFileTree.matching {
+            exclude jacocoCoverageExclusions
+        }
+    })
+    executionData.setFrom project.fileTree(dir: '.', include: '**/build/jacoco/test.exec')
+    violationRules {
+        rule {
+            limit {
+                counter = 'INSTRUCTION'
+                value = 'COVEREDRATIO'
+                minimum = 0.85
+            }
+        }
     }
 }
 
