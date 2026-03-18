@@ -20,6 +20,7 @@ import java.time.LocalDateTime;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -73,6 +74,32 @@ class SubscriptionControllerTest {
                 .andExpect(jsonPath("$.fundId").value("fund-001"))
                 .andExpect(jsonPath("$.amount").value(100000))
                 .andExpect(jsonPath("$.status").value("ACTIVE"));
+    }
+
+    @Test
+    void shouldTrimStringInputsBeforeCallingUseCase() throws Exception {
+        when(subscribeFundUseCase.execute(eq("client-001"), eq("fund-001"), eq(BigDecimal.valueOf(100_000L))))
+                .thenReturn(Subscription.builder()
+                        .subscriptionId("sub-001")
+                        .clientId("client-001")
+                        .fundId("fund-001")
+                        .amount(BigDecimal.valueOf(100_000L))
+                        .status(SubscriptionStatus.ACTIVE)
+                        .createdAt(LocalDateTime.of(2026, 3, 18, 0, 0))
+                        .build());
+
+        mockMvc.perform(post("/subscriptions")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "clientId": "  client-001  ",
+                                  "fundId": "  fund-001  ",
+                                  "amount": 100000
+                                }
+                                """))
+                .andExpect(status().isCreated());
+
+        verify(subscribeFundUseCase).execute("client-001", "fund-001", BigDecimal.valueOf(100_000L));
     }
 
     @Test
@@ -149,5 +176,21 @@ class SubscriptionControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.message").value("amount: amount must be greater than zero"));
+    }
+
+    @Test
+    void shouldReturnBadRequestWhenIdsHaveInvalidFormat() throws Exception {
+        mockMvc.perform(post("/subscriptions")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "clientId": "client 001",
+                                  "fundId": "fund-001",
+                                  "amount": 100000
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("REQUEST_VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.message", containsString("clientId: clientId has an invalid format")));
     }
 }

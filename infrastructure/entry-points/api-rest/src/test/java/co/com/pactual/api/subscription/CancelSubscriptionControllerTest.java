@@ -72,4 +72,12 @@ class CancelSubscriptionControllerTest {
                 .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.message").value("La suscripcion sub-001 ya se encuentra cancelada"));
     }
+
+    @Test
+    void shouldTrimSubscriptionIdBeforeCallingUseCase() throws Exception {
+        mockMvc.perform(delete("/subscriptions/{subscriptionId}", "  sub-001  "))
+                .andExpect(status().isNoContent());
+
+        verify(cancelSubscriptionUseCase).execute("sub-001");
+    }
 }

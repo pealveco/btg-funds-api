@@ -41,7 +41,7 @@ public class GlobalExceptionHandler {
             HttpServletRequest request
     ) {
         logWarn(exception, request, HttpStatus.BAD_REQUEST);
-        return buildResponse(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", exception.getMessage(), request);
+        return buildResponse(HttpStatus.BAD_REQUEST, "REQUEST_VALIDATION_ERROR", exception.getMessage(), request);
     }
 
     @ExceptionHandler(ClientNotFoundException.class)
