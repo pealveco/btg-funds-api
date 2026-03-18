@@ -16,6 +16,7 @@ import co.com.pactual.usecase.subscribefund.exception.ActiveSubscriptionAlreadyE
 import co.com.pactual.usecase.subscribefund.exception.ClientNotFoundException;
 import co.com.pactual.usecase.subscribefund.exception.FundNotFoundException;
 import co.com.pactual.usecase.subscribefund.exception.InsufficientBalanceException;
+import co.com.pactual.usecase.subscribefund.exception.MinimumSubscriptionAmountException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -41,6 +42,7 @@ class SubscribeFundUseCaseTest {
 
     private static final String CLIENT_ID = "client-001";
     private static final String FUND_ID = "fund-001";
+    private static final BigDecimal SUBSCRIPTION_AMOUNT = BigDecimal.valueOf(100_000L);
 
     @Mock
     private ClientRepository clientRepository;
@@ -93,13 +95,13 @@ class SubscribeFundUseCaseTest {
         when(transactionRepository.save(any(Transaction.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        Subscription subscription = useCase.execute(CLIENT_ID, FUND_ID);
+        Subscription subscription = useCase.execute(CLIENT_ID, FUND_ID, SUBSCRIPTION_AMOUNT);
 
         assertNotNull(subscription.getSubscriptionId());
         assertEquals(CLIENT_ID, subscription.getClientId());
         assertEquals(FUND_ID, subscription.getFundId());
         assertEquals(SubscriptionStatus.ACTIVE, subscription.getStatus());
-        assertEquals(fund.getMinimumAmount(), subscription.getAmount());
+        assertEquals(SUBSCRIPTION_AMOUNT, subscription.getAmount());
         assertNotNull(subscription.getCreatedAt());
 
         ArgumentCaptor<Client> clientCaptor = ArgumentCaptor.forClass(Client.class);
@@ -110,7 +112,7 @@ class SubscribeFundUseCaseTest {
         verify(transactionRepository).save(transactionCaptor.capture());
         assertNotNull(transactionCaptor.getValue().getTransactionId());
         assertEquals(TransactionType.SUBSCRIPTION, transactionCaptor.getValue().getType());
-        assertEquals(fund.getMinimumAmount(), transactionCaptor.getValue().getAmount());
+        assertEquals(SUBSCRIPTION_AMOUNT, transactionCaptor.getValue().getAmount());
     }
 
     @Test
@@ -118,7 +120,7 @@ class SubscribeFundUseCaseTest {
         when(clientRepository.findById(CLIENT_ID)).thenReturn(Optional.of(emailClient));
         when(fundRepository.findById(FUND_ID)).thenReturn(Optional.empty());
 
-        assertThrows(FundNotFoundException.class, () -> useCase.execute(CLIENT_ID, FUND_ID));
+        assertThrows(FundNotFoundException.class, () -> useCase.execute(CLIENT_ID, FUND_ID, SUBSCRIPTION_AMOUNT));
 
         verify(subscriptionRepository, never()).findActiveByClientAndFund(any(), any());
         verify(subscriptionRepository, never()).save(any());
@@ -128,7 +130,7 @@ class SubscribeFundUseCaseTest {
     void shouldThrowWhenClientNotFound() {
         when(clientRepository.findById(CLIENT_ID)).thenReturn(Optional.empty());
 
-        assertThrows(ClientNotFoundException.class, () -> useCase.execute(CLIENT_ID, FUND_ID));
+        assertThrows(ClientNotFoundException.class, () -> useCase.execute(CLIENT_ID, FUND_ID, SUBSCRIPTION_AMOUNT));
 
         verify(fundRepository, never()).findById(any());
         verify(subscriptionRepository, never()).save(any());
@@ -142,10 +144,27 @@ class SubscribeFundUseCaseTest {
         mockCommonDependencies(clientWithoutBalance, fund);
 
         InsufficientBalanceException exception =
-                assertThrows(InsufficientBalanceException.class, () -> useCase.execute(CLIENT_ID, FUND_ID));
+                assertThrows(InsufficientBalanceException.class, () -> useCase.execute(CLIENT_ID, FUND_ID, SUBSCRIPTION_AMOUNT));
 
         assertEquals(
                 "No tiene saldo disponible para vincularse al fondo " + fund.getName(),
+                exception.getMessage()
+        );
+        verify(subscriptionRepository, never()).save(any());
+        verify(transactionRepository, never()).save(any());
+    }
+
+    @Test
+    void shouldThrowWhenAmountIsBelowFundMinimum() {
+        mockCommonDependencies(emailClient, fund);
+
+        MinimumSubscriptionAmountException exception = assertThrows(
+                MinimumSubscriptionAmountException.class,
+                () -> useCase.execute(CLIENT_ID, FUND_ID, BigDecimal.valueOf(90_000L))
+        );
+
+        assertEquals(
+                "El monto de la suscripcion no cumple el minimo del fondo " + fund.getName(),
                 exception.getMessage()
         );
         verify(subscriptionRepository, never()).save(any());
@@ -158,7 +177,8 @@ class SubscribeFundUseCaseTest {
         when(subscriptionRepository.findActiveByClientAndFund(CLIENT_ID, FUND_ID))
                 .thenReturn(Optional.of(existingSubscription()));
 
-        assertThrows(ActiveSubscriptionAlreadyExistsException.class, () -> useCase.execute(CLIENT_ID, FUND_ID));
+        assertThrows(ActiveSubscriptionAlreadyExistsException.class,
+                () -> useCase.execute(CLIENT_ID, FUND_ID, SUBSCRIPTION_AMOUNT));
 
         verify(subscriptionRepository, never()).save(any());
         verify(clientRepository, never()).save(any(Client.class));
@@ -168,7 +188,7 @@ class SubscribeFundUseCaseTest {
     void shouldSendNotificationByEmail() {
         mockSuccessfulPersistence(emailClient, fund);
 
-        useCase.execute(CLIENT_ID, FUND_ID);
+        useCase.execute(CLIENT_ID, FUND_ID, SUBSCRIPTION_AMOUNT);
 
         verify(notificationGateway).sendNotification(
                 eq(emailClient.getEmail()),
@@ -181,7 +201,7 @@ class SubscribeFundUseCaseTest {
     void shouldSendNotificationBySms() {
         mockSuccessfulPersistence(smsClient, fund);
 
-        useCase.execute(CLIENT_ID, FUND_ID);
+        useCase.execute(CLIENT_ID, FUND_ID, SUBSCRIPTION_AMOUNT);
 
         verify(notificationGateway).sendNotification(
                 eq(smsClient.getPhone()),
@@ -211,7 +231,7 @@ class SubscribeFundUseCaseTest {
                 .subscriptionId("sub-001")
                 .clientId(CLIENT_ID)
                 .fundId(FUND_ID)
-                .amount(fund.getMinimumAmount())
+                .amount(SUBSCRIPTION_AMOUNT)
                 .status(SubscriptionStatus.ACTIVE)
                 .build();
     }

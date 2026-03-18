@@ -244,7 +244,9 @@ Resources:
                 Action:
                   - dynamodb:PutItem
                   - dynamodb:GetItem
-                Resource: !GetAtt FundsTable.Arn
+                Resource:
+                  - !GetAtt FundsTable.Arn
+                  - !GetAtt ClientsTable.Arn
 
   SeedFundsFunction:
     Type: AWS::Lambda::Function
@@ -257,6 +259,7 @@ Resources:
       Environment:
         Variables:
           FUNDS_TABLE_NAME: !Ref FundsTable
+          CLIENTS_TABLE_NAME: !Ref ClientsTable
       Code:
         ZipFile: |
           import json
@@ -265,7 +268,8 @@ Resources:
           import boto3
 
           dynamodb = boto3.resource("dynamodb")
-          table = dynamodb.Table(os.environ["FUNDS_TABLE_NAME"])
+          funds_table = dynamodb.Table(os.environ["FUNDS_TABLE_NAME"])
+          clients_table = dynamodb.Table(os.environ["CLIENTS_TABLE_NAME"])
 
           FUNDS = [
               {"fundId": "1", "name": "FPV_BTG_PACTUAL_RECAUDADORA", "minimumAmount": 75000, "category": "FPV"},
@@ -273,6 +277,25 @@ Resources:
               {"fundId": "3", "name": "DEUDAPRIVADA", "minimumAmount": 50000, "category": "FIC"},
               {"fundId": "4", "name": "FDO-ACCIONES", "minimumAmount": 250000, "category": "FIC"},
               {"fundId": "5", "name": "FPV_BTG_PACTUAL_DINAMICA", "minimumAmount": 100000, "category": "FPV"}
+          ]
+
+          CLIENTS = [
+              {
+                  "clientId": "client-001",
+                  "name": "Ana Perez",
+                  "email": "ana.perez@example.com",
+                  "phone": "3001234567",
+                  "notificationPreference": "EMAIL",
+                  "availableBalance": 500000
+              },
+              {
+                  "clientId": "client-002",
+                  "name": "Carlos Gomez",
+                  "email": "carlos.gomez@example.com",
+                  "phone": "3007654321",
+                  "notificationPreference": "SMS",
+                  "availableBalance": 500000
+              }
           ]
 
           def send_response(event, context, status, data, physical_id=None):
@@ -303,9 +326,11 @@ Resources:
                   request_type = event["RequestType"]
                   if request_type in ["Create", "Update"]:
                       for fund in FUNDS:
-                          table.put_item(Item=fund)
+                          funds_table.put_item(Item=fund)
+                      for client in CLIENTS:
+                          clients_table.put_item(Item=client)
 
-                  send_response(event, context, "SUCCESS", {"message": "Funds seeded successfully"})
+                  send_response(event, context, "SUCCESS", {"message": "Funds and clients seeded successfully"})
               except Exception as e:
                   send_response(event, context, "FAILED", {"message": str(e)})
 
