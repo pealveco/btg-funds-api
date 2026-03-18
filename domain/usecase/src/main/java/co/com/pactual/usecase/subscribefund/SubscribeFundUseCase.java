@@ -16,6 +16,8 @@ import co.com.pactual.usecase.subscribefund.exception.ActiveSubscriptionAlreadyE
 import co.com.pactual.usecase.subscribefund.exception.ClientNotFoundException;
 import co.com.pactual.usecase.subscribefund.exception.FundNotFoundException;
 import co.com.pactual.usecase.subscribefund.exception.InsufficientBalanceException;
+import co.com.pactual.usecase.subscribefund.exception.MinimumSubscriptionAmountException;
+import co.com.pactual.usecase.subscribefund.exception.SubscriptionPersistenceException;
 import lombok.RequiredArgsConstructor;
 
 import java.math.BigDecimal;
@@ -33,26 +35,39 @@ public class SubscribeFundUseCase {
     private final NotificationGateway notificationGateway;
 
     public Subscription execute(String clientId, String fundId) {
+        Fund fund = fundRepository.findById(fundId)
+                .orElseThrow(() -> new FundNotFoundException(fundId));
+        return execute(clientId, fundId, fund.getMinimumAmount(), fund);
+    }
+
+    public Subscription execute(String clientId, String fundId, BigDecimal amount) {
+        return execute(clientId, fundId, amount, null);
+    }
+
+    private Subscription execute(String clientId, String fundId, BigDecimal amount, Fund resolvedFund) {
         Client client = clientRepository.findById(clientId)
                 .orElseThrow(() -> new ClientNotFoundException(clientId));
-        Fund fund = fundRepository.findById(fundId)
+        Fund fund = resolvedFund != null ? resolvedFund : fundRepository.findById(fundId)
                 .orElseThrow(() -> new FundNotFoundException(fundId));
 
         validateNoActiveSubscription(clientId, fundId);
-        validateAvailableBalance(client, fund);
+        validateMinimumAmount(amount, fund);
+        validateAvailableBalance(client, amount, fund);
 
-        LocalDateTime now = LocalDateTime.now();
-        BigDecimal amount = fund.getMinimumAmount();
+        try {
+            LocalDateTime now = LocalDateTime.now();
+            Subscription subscription = subscriptionRepository.save(buildSubscription(clientId, fundId, amount, now));
 
-        Subscription subscription = subscriptionRepository.save(buildSubscription(clientId, fundId, amount, now));
+            Client updatedClient = updateClientBalance(client, amount);
+            clientRepository.save(updatedClient);
 
-        Client updatedClient = updateClientBalance(client, amount);
-        clientRepository.save(updatedClient);
+            transactionRepository.save(buildTransaction(clientId, fundId, amount, now));
+            notifyClient(updatedClient, fund, amount);
 
-        transactionRepository.save(buildTransaction(clientId, fundId, amount, now));
-        notifyClient(updatedClient, fund, amount);
-
-        return subscription;
+            return subscription;
+        } catch (RuntimeException exception) {
+            throw new SubscriptionPersistenceException(exception);
+        }
     }
 
     private void validateNoActiveSubscription(String clientId, String fundId) {
@@ -62,8 +77,14 @@ public class SubscribeFundUseCase {
                 });
     }
 
-    private void validateAvailableBalance(Client client, Fund fund) {
-        if (resolveBalance(client).compareTo(fund.getMinimumAmount()) < 0) {
+    private void validateMinimumAmount(BigDecimal amount, Fund fund) {
+        if (amount == null || amount.compareTo(fund.getMinimumAmount()) < 0) {
+            throw new MinimumSubscriptionAmountException(fund.getName());
+        }
+    }
+
+    private void validateAvailableBalance(Client client, BigDecimal amount, Fund fund) {
+        if (resolveBalance(client).compareTo(amount) < 0) {
             throw new InsufficientBalanceException(fund.getName());
         }
     }
@@ -98,10 +119,17 @@ public class SubscribeFundUseCase {
     }
 
     private void notifyClient(Client client, Fund fund, BigDecimal amount) {
+        if (client.getNotificationPreference() == null) {
+            return;
+        }
         String message = buildNotificationMessage(client, fund, amount);
         NotificationChannel channel = client.getNotificationPreference();
         String destination = NotificationChannel.SMS.equals(channel) ? client.getPhone() : client.getEmail();
-        notificationGateway.sendNotification(destination, message, channel);
+        try {
+            notificationGateway.sendNotification(destination, message, channel);
+        } catch (RuntimeException ignored) {
+            // Notifications are best-effort and should not fail the main flow.
+        }
     }
 
     private String buildNotificationMessage(Client client, Fund fund, BigDecimal amount) {
