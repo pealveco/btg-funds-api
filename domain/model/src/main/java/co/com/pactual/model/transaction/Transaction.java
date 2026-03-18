@@ -16,6 +16,7 @@ import java.time.LocalDateTime;
 @Builder(toBuilder = true)
 public class Transaction {
     private String transactionId;
+    private String subscriptionId;
     private String clientId;
     private String fundId;
     private TransactionType type;

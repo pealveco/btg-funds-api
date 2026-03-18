@@ -61,7 +61,7 @@ public class SubscribeFundUseCase {
             Client updatedClient = updateClientBalance(client, amount);
             clientRepository.save(updatedClient);
 
-            transactionRepository.save(buildTransaction(clientId, fundId, amount, now));
+            transactionRepository.save(buildTransaction(subscription.getSubscriptionId(), clientId, fundId, amount, now));
             notifyClient(updatedClient, fund, amount);
 
             return subscription;
@@ -107,9 +107,10 @@ public class SubscribeFundUseCase {
                 .build();
     }
 
-    private Transaction buildTransaction(String clientId, String fundId, BigDecimal amount, LocalDateTime now) {
+    private Transaction buildTransaction(String subscriptionId, String clientId, String fundId, BigDecimal amount, LocalDateTime now) {
         return Transaction.builder()
                 .transactionId(UUID.randomUUID().toString())
+                .subscriptionId(subscriptionId)
                 .clientId(clientId)
                 .fundId(fundId)
                 .type(TransactionType.SUBSCRIPTION)

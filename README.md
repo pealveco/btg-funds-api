@@ -1,237 +1,294 @@
-# BTG Funds API
+# 💰 BTG Funds API
 
-API REST para la gestión de fondos de inversión, desarrollada como solución para la prueba técnica de Backend.
-Permite a los clientes suscribirse a fondos, cancelar suscripciones y consultar su historial de transacciones.
+API backend desarrollada en Java 17 + Spring Boot + Clean Architecture con el scaffold de Bancolombia para la gestion de fondos de inversion.
 
----
-
-## 📌 Descripción del problema
-
-Se requiere construir una plataforma que permita a los clientes gestionar sus fondos de inversión sin necesidad de intervención de un asesor.
-
-### Funcionalidades principales:
+Permite:
+- Consultar fondos disponibles
 - Suscribirse a un fondo
-- Cancelar una suscripción
-- Consultar historial de transacciones
-- Recibir notificaciones (email o SMS)
+- Cancelar suscripciones
+- Registrar transacciones
+- Integrar notificaciones
 
-### Reglas de negocio:
-- Saldo inicial del cliente: **COP $500.000**
-- Cada fondo tiene un monto mínimo de vinculación
-- Cada transacción tiene un identificador único
-- Al cancelar una suscripción, el saldo se reintegra
-- Si no hay saldo suficiente, se debe informar al usuario
+## 🚀 Tecnologias
 
----
-
-## 🏗️ Arquitectura
-
-El proyecto está basado en **Clean Architecture (Hexagonal)**, lo que permite separar claramente la lógica de negocio de la infraestructura.
-
-### Estructura del proyecto:
-
-```
-├── domain            # Entidades y contratos del negocio
-├── usecase          # Casos de uso (lógica de aplicación)
-├── entry-points     # API REST (controladores)
-├── driven-adapters  # Persistencia, notificaciones, etc.
-```
-
-### Principios aplicados:
-- Separación de responsabilidades
-- Inversión de dependencias
-- Código desacoplado de frameworks
-- Testabilidad
-
----
-
-## 🧠 Modelo de dominio
-
-### Entidades principales:
-- **Client**
-- **Fund**
-- **Subscription**
-- **Transaction**
-
-### Enumeraciones:
-- `TransactionType` (SUBSCRIPTION, CANCELLATION)
-- `NotificationChannel` (EMAIL, SMS)
-
----
-
-## 🗄️ Modelo de datos (NoSQL)
-
-Se propone un modelo basado en documentos (DynamoDB o equivalente), optimizado para consultas por cliente.
-
-### Colecciones:
-
-#### clients
-- clientId
-- name
-- email
-- phone
-- notificationPreference
-- availableBalance
-
-#### funds
-- fundId
-- name
-- minimumAmount
-- category
-
-#### subscriptions
-- subscriptionId
-- clientId
-- fundId
-- amount
-- status
-- createdAt
-- cancelledAt
-
-#### transactions
-- transactionId
-- clientId
-- fundId
-- type
-- amount
-- createdAt
-
----
-
-## 🚀 API REST
-
-### Endpoints principales:
-
-#### Suscribirse a un fondo
-```
-POST /api/v1/funds/subscriptions
-```
-
-#### Cancelar suscripción
-```
-POST /api/v1/funds/subscriptions/{subscriptionId}/cancel
-```
-
-#### Consultar historial de transacciones
-```
-GET /api/v1/clients/{clientId}/transactions
-```
-
-#### Listar fondos disponibles
-```
-GET /api/v1/funds
-```
-
----
-
-## ⚙️ Manejo de errores
-
-Se implementa un manejo centralizado de excepciones:
-
-Ejemplo de respuesta:
-
-```json
-{
-  "code": "INSUFFICIENT_BALANCE",
-  "message": "No tiene saldo disponible para vincularse al fondo",
-  "timestamp": "2025-06-20T10:00:00"
-}
-```
-
----
-
-## 🔔 Notificaciones
-
-El sistema envía notificaciones al cliente al momento de suscribirse a un fondo:
-
-- Email
-- SMS
-
-La implementación se abstrae mediante un `NotificationGateway`, permitiendo cambiar fácilmente el proveedor.
-
----
-
-## 🔐 Seguridad
-
-Se define una estrategia basada en:
-
-- Autenticación mediante JWT
-- Autorización por roles (CLIENT)
-- Encriptación en tránsito (HTTPS)
-- Encriptación en reposo (AWS DynamoDB)
-
-> Nota: Para esta prueba, se puede simular el esquema de autenticación.
-
----
-
-## 🧪 Pruebas
-
-Se incluyen pruebas unitarias enfocadas en los casos de uso principales:
-
-- Suscripción exitosa
-- Validación de saldo insuficiente
-- Cancelación de suscripción
-- Consulta de historial
-
----
-
-## 🧩 SQL (Parte 2)
-
-Se incluye la solución a la consulta SQL solicitada en:
-
-```
-/sql/solution.sql
-```
-
----
-
-## ▶️ Cómo ejecutar el proyecto
-
-### Requisitos:
 - Java 17
+- Spring Boot
 - Gradle
+- Clean Architecture (Scaffold Bancolombia)
+- Docker
+- AWS:
+  - DynamoDB
+  - SNS
+  - ECR
+  - App Runner
+  - CloudFormation
 
-### Ejecutar:
+## 🧱 Arquitectura
+
+El proyecto sigue Clean Architecture, separando responsabilidades por capas:
+
+```text
+.
+├── applications
+│   └── app-service
+├── domain
+│   ├── model
+│   └── usecase
+└── infrastructure
+    ├── driven-adapters
+    └── entry-points
+```
+
+### 🔑 Principios aplicados
+
+- Inversion de dependencias
+- Separacion de responsabilidades
+- Dominio independiente de infraestructura
+- Alta testabilidad
+
+## 📦 Funcionalidades implementadas
+
+### ✅ Historia 2.1 – Consultar fondos
+
+- Endpoint: `GET /funds`
+- Retorna la lista completa de fondos disponibles
+- Los fondos seed se cargan automaticamente en DynamoDB
+
+### ✅ Historia 2.2 – Suscribirse a un fondo
+
+- Endpoint: `POST /subscriptions`
+- Valida:
+  - cliente existente
+  - fondo existente
+  - monto minimo del fondo
+  - saldo disponible
+  - suscripcion activa duplicada
+- Guarda la suscripcion en DynamoDB
+- Descuenta saldo del cliente
+- Registra transaccion
+- Usa el gateway de notificaciones de forma desacoplada
+
+### ✅ Historia 2.3 – Cancelar suscripcion
+
+- Endpoint: `DELETE /subscriptions/{id}`
+- Valida:
+  - suscripcion existente
+  - que no este cancelada previamente
+- Implementacion:
+  - cancelacion logica
+  - `status = CANCELLED`
+  - `cancelledAt = timestamp`
+- Reintegra saldo al cliente
+- Registra transaccion de cancelacion
+
+## 🧠 Decisiones de diseño clave
+
+### Cancelacion logica
+
+La cancelacion es soft delete. No se elimina la suscripcion fisicamente para:
+
+- mantener historial de operaciones
+- soportar auditoria y trazabilidad
+- evitar perdida de informacion financiera
+
+### Registro de transacciones
+
+Cada operacion relevante genera una transaccion:
+
+- suscripcion
+- cancelacion
+
+Las transacciones guardan `subscriptionId`, `clientId`, `fundId`, `type`, `amount` y `createdAt`.
+
+### Manejo de errores
+
+La API usa excepciones de use case y un manejador global en `api-rest`.
+
+- `400` para reglas de negocio invalidas
+- `404` para recursos no encontrados
+- `409` para conflictos de negocio
+- `500` para errores internos o de persistencia
+
+## ☁️ Infraestructura AWS
+
+Provisionada con [cloudformation.yaml](/home/certhakzu/Documentos/Ceiba/tecnical%20test/btg-funds-api/deployment/aws/cloudformation.yaml).
+
+### Recursos
+
+- DynamoDB:
+  - Clients
+  - Funds
+  - Subscriptions
+  - Transactions
+- SNS Topic para notificaciones
+- ECR para imagenes Docker
+- App Runner para despliegue
+- Lambda para seed de fondos y clientes
+
+## 🌱 Seed de datos
+
+CloudFormation carga automaticamente:
+
+### Fondos iniciales
+
+- `FPV_BTG_PACTUAL_RECAUDADORA`
+- `FPV_BTG_PACTUAL_ECOPETROL`
+- `DEUDAPRIVADA`
+- `FDO-ACCIONES`
+- `FPV_BTG_PACTUAL_DINAMICA`
+
+### Clientes iniciales
+
+- `client-001`
+- `client-002`
+
+Ambos con saldo inicial de `500000`.
+
+## 🔧 Variables de entorno
+
+Variables usadas por la aplicacion:
+
+```text
+AWS_REGION
+CLIENTS_TABLE
+FUNDS_TABLE
+SUBSCRIPTIONS_TABLE
+TRANSACTIONS_TABLE
+NOTIFICATIONS_TOPIC_ARN
+SPRING_APPLICATION_NAME
+SERVER_PORT
+DYNAMODB_ENDPOINT
+SPRING_PROFILES_INCLUDE
+```
+
+Notas:
+
+- `DYNAMODB_ENDPOINT` es opcional. Si esta vacio, usa DynamoDB real en AWS.
+- `funds.env` es solo para entorno local y no se versiona.
+
+## ▶️ Ejecucion local
+
+### 1. Clonar repositorio
+
+```bash
+git clone <repo-url>
+cd btg-funds-api
+```
+
+### 2. Cargar variables locales
+
+```bash
+set -a
+source funds.env
+set +a
+```
+
+### 3. Ejecutar aplicacion
+
 ```bash
 ./gradlew bootRun
 ```
 
----
+## 🧪 Pruebas con curl
 
-## 🧪 Ejecutar pruebas
+### Health Check
 
 ```bash
-./gradlew test
+curl --location 'http://localhost:8080/actuator/health'
 ```
 
----
+### Obtener fondos
 
-## ☁️ Despliegue
+```bash
+curl --location 'http://localhost:8080/funds' \
+  --header 'Accept: application/json'
+```
 
-El proyecto está diseñado para ser desplegado en AWS utilizando:
+### Suscribirse a un fondo
 
-- AWS CloudFormation
-- Amazon ECR
-- AWS App Runner
-- DynamoDB
-- SNS
+```bash
+curl --location 'http://localhost:8080/subscriptions' \
+  --header 'Content-Type: application/json' \
+  --header 'Accept: application/json' \
+  --data '{
+    "clientId": "client-001",
+    "fundId": "1",
+    "amount": 100000
+  }'
+```
 
----
+### Cancelar suscripcion
 
-## CI/CD
+```bash
+curl --location --request DELETE 'http://localhost:8080/subscriptions/sub-001'
+```
 
-El repositorio incluye un workflow de GitHub Actions en `.github/workflows/ci-cd.yml` orientado a una prueba técnica backend, con un flujo simple y defendible:
+## 🌐 Despliegue en App Runner
 
-- hace checkout del código
-- configura Java 17 y usa el wrapper de Gradle
-- ejecuta `./gradlew clean build`
-- valida `deployment/aws/cloudformation.yaml`
-- autentica contra AWS con secrets de GitHub
-- crea la infraestructura base si el stack aún no existe
-- obtiene `EcrRepositoryUri` desde los outputs del stack
-- construye la imagen Docker usando `deployment/Dockerfile`
-- publica la imagen en Amazon ECR con tag `latest`
-- actualiza el stack `btg-funds-api-dev` pasando `AppImageUri=<ECR_URI>:latest`
+### Health check
+
+```bash
+curl --location 'https://q5d8y4kqwp.us-east-1.awsapprunner.com/actuator/health'
+```
+
+### Fondos
+
+```bash
+curl --location 'https://q5d8y4kqwp.us-east-1.awsapprunner.com/funds' \
+  --header 'Accept: application/json'
+```
+
+### Suscribirse
+
+```bash
+curl --location 'https://q5d8y4kqwp.us-east-1.awsapprunner.com/subscriptions' \
+  --header 'Content-Type: application/json' \
+  --header 'Accept: application/json' \
+  --data '{
+    "clientId": "client-001",
+    "fundId": "1",
+    "amount": 100000
+  }'
+```
+
+### Cancelar suscripcion
+
+```bash
+curl --location --request DELETE 'https://q5d8y4kqwp.us-east-1.awsapprunner.com/subscriptions/sub-001'
+```
+
+## 🐳 Docker
+
+La imagen se construye con [Dockerfile](/home/certhakzu/Documentos/Ceiba/tecnical%20test/btg-funds-api/deployment/Dockerfile) usando el jar:
+
+`applications/app-service/build/libs/BtgPactualFundsApi.jar`
+
+### Build
+
+```bash
+docker build -f deployment/Dockerfile -t btg-funds-api .
+```
+
+### Run
+
+```bash
+docker run -p 8080:8080 btg-funds-api
+```
+
+## 📦 CI/CD
+
+El workflow está en [ci-cd.yml](/home/certhakzu/Documentos/Ceiba/tecnical%20test/btg-funds-api/.github/workflows/ci-cd.yml).
+
+Hace:
+
+- checkout del repo
+- setup de Java 17
+- `./gradlew clean build`
+- validacion del template CloudFormation
+- autenticacion en AWS
+- resolucion del `EcrRepositoryUri` desde el stack
+- build y push de imagen Docker a ECR
+- deploy del stack con `AppImageUri` versionado por SHA
 
 ### Secrets requeridos
 
@@ -239,58 +296,52 @@ El repositorio incluye un workflow de GitHub Actions en `.github/workflows/ci-cd
 - `AWS_SECRET_ACCESS_KEY`
 - `AWS_REGION`
 
-`AWS_ACCOUNT_ID` no es necesario porque el pipeline obtiene la URI del repositorio ECR desde los outputs de CloudFormation.
-
-### Variables del pipeline
+### Variables globales del workflow
 
 - `AWS_REGION=us-east-1`
 - `PROJECT_NAME=btg-funds-api`
 - `ENVIRONMENT=dev`
 - `STACK_NAME=btg-funds-api-dev`
-- `IMAGE_TAG=latest`
+- `IMAGE_TAG=${{ github.sha }}`
 
-### Cómo despliega
+### Como despliega
 
-En el primer despliegue el workflow crea la infraestructura base sin imagen para materializar el repositorio ECR. Luego resuelve el output `EcrRepositoryUri`, publica la imagen y ejecuta un segundo `cloudformation deploy` con `AppImageUri` para crear o actualizar App Runner.
+El pipeline publica una imagen en ECR con tag igual al SHA del commit y actualiza CloudFormation con ese `AppImageUri`. Esto evita el problema de usar `latest` y garantiza que App Runner detecte cambios reales.
 
-### Recursos AWS usados
+## 📊 Modelo de datos
 
-- `AWS::ECR::Repository`
-- `AWS::AppRunner::Service`
-- `AWS::DynamoDB::Table`
-- `AWS::SNS::Topic`
-- `AWS::IAM::Role`
-- `AWS::Lambda::Function`
+### Subscription
 
-### Limitaciones y mejoras futuras
+- `subscriptionId`
+- `clientId`
+- `fundId`
+- `amount`
+- `status`
+- `createdAt`
+- `cancelledAt`
 
-- El workflow usa `latest` por simplicidad de prueba técnica; en producción conviene versionar con SHA o tags semánticos.
-- El pipeline usa credenciales estáticas de GitHub Secrets; en producción conviene migrar a OIDC con rol federado.
-- El deploy apunta a `dev`; para `qa` y `prod` conviene separar entornos y aprobaciones.
-- El build actualmente ejecuta tests. Si en una demo futura fallan por wiring temporal del scaffold, la alternativa pragmática sería separar un job de empaquetado con `-x test`, pero no se deja activo por defecto para no ocultar regresiones.
-- App Runner exige un health endpoint HTTP. Para soportarlo se agregó `spring-boot-starter-web`, `spring-boot-starter-actuator` y la exposición de `/actuator/health`.
+### Transaction
 
----
+- `transactionId`
+- `subscriptionId`
+- `clientId`
+- `fundId`
+- `type`
+- `amount`
+- `createdAt`
 
-## 📌 Decisiones técnicas
+## ⚠️ Consideraciones tecnicas
 
-- Uso de Clean Architecture para desacoplar lógica de negocio
-- Modelo NoSQL orientado a acceso por cliente
-- Separación de capas para facilitar testabilidad
-- Uso de DTOs para desacoplar API del dominio
+- DynamoDB usa indices secundarios para consultas por cliente.
+- Los adapters de infraestructura solo traducen dominio ↔ persistencia.
+- El dominio no depende de Spring ni de infraestructura concreta.
+- Las notificaciones estan desacopladas por `NotificationGateway`.
+- La cancelacion mantiene historial completo y no elimina datos.
 
----
+## 🔭 Mejoras futuras
 
-## 🚀 Mejoras futuras
-
-- Implementación completa de seguridad con JWT
-- Integración real con servicios de email/SMS
-- Uso de eventos (event-driven architecture)
-- Implementación de CQRS
-- Observabilidad (logs, métricas, tracing)
-
----
-
-## 👨‍💻 Autor
-
-Desarrollado por **Piter Velasquez**
+- autenticacion y autorizacion
+- tests de integracion end-to-end
+- observabilidad centralizada
+- manejo transaccional mas robusto para operaciones compuestas
+- resiliencia para notificaciones externas
