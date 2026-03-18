@@ -147,6 +147,38 @@ Resources:
     Properties:
       TopicName: !Sub '${ProjectName}-${Environment}-notifications'
 
+  NotificationsQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub '${ProjectName}-${Environment}-notifications'
+      VisibilityTimeout: 30
+
+  NotificationsQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref NotificationsQueue
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowSnsToSendMessages
+            Effect: Allow
+            Principal:
+              Service: sns.amazonaws.com
+            Action: sqs:SendMessage
+            Resource: !GetAtt NotificationsQueue.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !Ref NotificationsTopic
+
+  NotificationsQueueSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref NotificationsTopic
+      Protocol: sqs
+      Endpoint: !GetAtt NotificationsQueue.Arn
+      RawMessageDelivery: true
+
   EcrRepository:
     Type: AWS::ECR::Repository
     Properties:
@@ -404,6 +436,12 @@ Outputs:
 
   NotificationsTopicArn:
     Value: !Ref NotificationsTopic
+
+  NotificationsQueueName:
+    Value: !GetAtt NotificationsQueue.QueueName
+
+  NotificationsQueueUrl:
+    Value: !Ref NotificationsQueue
 
   EcrRepositoryUri:
     Value: !GetAtt EcrRepository.RepositoryUri

@@ -8,6 +8,7 @@ import co.com.pactual.model.enums.TransactionType;
 import co.com.pactual.model.fund.Fund;
 import co.com.pactual.model.fund.gateways.FundRepository;
 import co.com.pactual.model.gateways.NotificationGateway;
+import co.com.pactual.model.notification.NotificationEvent;
 import co.com.pactual.model.subscription.Subscription;
 import co.com.pactual.model.subscription.gateways.SubscriptionRepository;
 import co.com.pactual.model.transaction.Transaction;
@@ -32,7 +33,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -190,11 +190,11 @@ class SubscribeFundUseCaseTest {
 
         useCase.execute(CLIENT_ID, FUND_ID, SUBSCRIPTION_AMOUNT);
 
-        verify(notificationGateway).sendNotification(
-                eq(emailClient.getEmail()),
-                any(String.class),
-                eq(NotificationChannel.EMAIL)
-        );
+        ArgumentCaptor<NotificationEvent> eventCaptor = ArgumentCaptor.forClass(NotificationEvent.class);
+        verify(notificationGateway).publish(eventCaptor.capture());
+        assertEquals("SUBSCRIPTION_CREATED", eventCaptor.getValue().getEventType());
+        assertEquals(emailClient.getEmail(), eventCaptor.getValue().getDestination());
+        assertEquals(NotificationChannel.EMAIL, eventCaptor.getValue().getChannel());
     }
 
     @Test
@@ -203,11 +203,11 @@ class SubscribeFundUseCaseTest {
 
         useCase.execute(CLIENT_ID, FUND_ID, SUBSCRIPTION_AMOUNT);
 
-        verify(notificationGateway).sendNotification(
-                eq(smsClient.getPhone()),
-                any(String.class),
-                eq(NotificationChannel.SMS)
-        );
+        ArgumentCaptor<NotificationEvent> eventCaptor = ArgumentCaptor.forClass(NotificationEvent.class);
+        verify(notificationGateway).publish(eventCaptor.capture());
+        assertEquals("SUBSCRIPTION_CREATED", eventCaptor.getValue().getEventType());
+        assertEquals(smsClient.getPhone(), eventCaptor.getValue().getDestination());
+        assertEquals(NotificationChannel.SMS, eventCaptor.getValue().getChannel());
     }
 
     private void mockCommonDependencies(Client client, Fund fundToUse) {

@@ -8,6 +8,7 @@ import co.com.pactual.model.enums.TransactionType;
 import co.com.pactual.model.fund.Fund;
 import co.com.pactual.model.fund.gateways.FundRepository;
 import co.com.pactual.model.gateways.NotificationGateway;
+import co.com.pactual.model.notification.NotificationEvent;
 import co.com.pactual.model.subscription.Subscription;
 import co.com.pactual.model.subscription.gateways.SubscriptionRepository;
 import co.com.pactual.model.transaction.Transaction;
@@ -62,7 +63,7 @@ public class SubscribeFundUseCase {
             clientRepository.save(updatedClient);
 
             transactionRepository.save(buildTransaction(subscription.getSubscriptionId(), clientId, fundId, amount, now));
-            notifyClient(updatedClient, fund, amount);
+            publishSubscriptionCreatedEvent(updatedClient, subscription, now);
 
             return subscription;
         } catch (RuntimeException exception) {
@@ -119,27 +120,27 @@ public class SubscribeFundUseCase {
                 .build();
     }
 
-    private void notifyClient(Client client, Fund fund, BigDecimal amount) {
+    private void publishSubscriptionCreatedEvent(Client client, Subscription subscription, LocalDateTime now) {
         if (client.getNotificationPreference() == null) {
             return;
         }
-        String message = buildNotificationMessage(client, fund, amount);
         NotificationChannel channel = client.getNotificationPreference();
         String destination = NotificationChannel.SMS.equals(channel) ? client.getPhone() : client.getEmail();
         try {
-            notificationGateway.sendNotification(destination, message, channel);
+            notificationGateway.publish(NotificationEvent.builder()
+                    .eventType("SUBSCRIPTION_CREATED")
+                    .subscriptionId(subscription.getSubscriptionId())
+                    .clientId(subscription.getClientId())
+                    .fundId(subscription.getFundId())
+                    .amount(subscription.getAmount())
+                    .timestamp(now)
+                    .status(subscription.getStatus().name())
+                    .channel(channel)
+                    .destination(destination)
+                    .build());
         } catch (RuntimeException ignored) {
             // Notifications are best-effort and should not fail the main flow.
         }
-    }
-
-    private String buildNotificationMessage(Client client, Fund fund, BigDecimal amount) {
-        return "Cliente " + client.getName()
-                + ", su suscripcion al fondo "
-                + fund.getName()
-                + " por valor de "
-                + amount.toPlainString()
-                + " fue creada exitosamente.";
     }
 
     private BigDecimal resolveBalance(Client client) {
