@@ -6,7 +6,7 @@ Permite:
 - Consultar fondos disponibles
 - Suscribirse a un fondo
 - Cancelar suscripciones
-- Registrar transacciones
+- Consultar historial de transacciones
 - Integrar notificaciones
 
 ## 🚀 Tecnologias
@@ -81,6 +81,14 @@ El proyecto sigue Clean Architecture, separando responsabilidades por capas:
 - Reintegra saldo al cliente
 - Registra transaccion de cancelacion
 
+### ✅ Historia 2.4 – Historial de transacciones
+
+- Endpoint: `GET /transactions?clientId=<CLIENT_ID>`
+- Filtra por `clientId`
+- Devuelve transacciones de suscripcion y cancelacion
+- Ordena por fecha descendente: la mas reciente primero
+- Valida `clientId` faltante o vacio con `400`
+
 ## 🧠 Decisiones de diseño clave
 
 ### Cancelacion logica
@@ -98,6 +106,8 @@ Cada operacion relevante genera una transaccion:
 - suscripcion
 - cancelacion
 
+El historial se consulta por `clientId` y se ordena por `createdAt` descendente en el use case para dejar el comportamiento explicito y estable.
+
 Las transacciones guardan `subscriptionId`, `clientId`, `fundId`, `type`, `amount` y `createdAt`.
 
 ### Manejo de errores
@@ -105,6 +115,7 @@ Las transacciones guardan `subscriptionId`, `clientId`, `fundId`, `type`, `amoun
 La API usa excepciones de use case y un manejador global en `api-rest`.
 
 - `400` para reglas de negocio invalidas
+- `400` para payloads invalidos o parametros requeridos faltantes
 - `404` para recursos no encontrados
 - `409` para conflictos de negocio
 - `500` para errores internos o de persistencia
@@ -223,6 +234,13 @@ curl --location 'http://localhost:8080/subscriptions' \
 curl --location --request DELETE 'http://localhost:8080/subscriptions/sub-001'
 ```
 
+### Consultar historial de transacciones
+
+```bash
+curl --location 'http://localhost:8080/transactions?clientId=client-001' \
+  --header 'Accept: application/json'
+```
+
 ## 🌐 Despliegue en App Runner
 
 ### Health check
@@ -255,6 +273,13 @@ curl --location 'https://q5d8y4kqwp.us-east-1.awsapprunner.com/subscriptions' \
 
 ```bash
 curl --location --request DELETE 'https://q5d8y4kqwp.us-east-1.awsapprunner.com/subscriptions/sub-001'
+```
+
+### Historial de transacciones
+
+```bash
+curl --location 'https://q5d8y4kqwp.us-east-1.awsapprunner.com/transactions?clientId=client-001' \
+  --header 'Accept: application/json'
 ```
 
 ## 🐳 Docker
@@ -330,6 +355,21 @@ El pipeline publica una imagen en ECR con tag igual al SHA del commit y actualiz
 - `amount`
 - `createdAt`
 
+## 🧪 Validacion HTTP
+
+En los entry points con payload se usa Bean Validation.
+
+Ejemplos actuales:
+
+- `POST /subscriptions`
+  - `clientId` requerido
+  - `fundId` requerido
+  - `amount` requerido
+  - `amount > 0`
+
+- `GET /transactions`
+  - `clientId` requerido como query param
+
 ## ⚠️ Consideraciones tecnicas
 
 - DynamoDB usa indices secundarios para consultas por cliente.
@@ -337,6 +377,7 @@ El pipeline publica una imagen en ECR con tag igual al SHA del commit y actualiz
 - El dominio no depende de Spring ni de infraestructura concreta.
 - Las notificaciones estan desacopladas por `NotificationGateway`.
 - La cancelacion mantiene historial completo y no elimina datos.
+- El historial de transacciones se ordena en el use case aunque DynamoDB ya consulta por el indice `clientId-createdAt-index`.
 
 ## 🔭 Mejoras futuras
 
@@ -345,3 +386,8 @@ El pipeline publica una imagen en ECR con tag igual al SHA del commit y actualiz
 - observabilidad centralizada
 - manejo transaccional mas robusto para operaciones compuestas
 - resiliencia para notificaciones externas
+
+👨‍💻 Autor
+
+Piter Velasquez
+Backend Developer – Java | Spring Boot | AWS

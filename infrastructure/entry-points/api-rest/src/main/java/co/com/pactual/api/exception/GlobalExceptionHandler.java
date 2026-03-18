@@ -1,6 +1,7 @@
 package co.com.pactual.api.exception;
 
 import co.com.pactual.usecase.getfunds.exception.FundsRetrievalException;
+import co.com.pactual.usecase.gettransactionhistory.exception.TransactionHistoryRetrievalException;
 import co.com.pactual.usecase.cancelsubscription.exception.SubscriptionAlreadyCancelledException;
 import co.com.pactual.usecase.cancelsubscription.exception.SubscriptionCancellationPersistenceException;
 import co.com.pactual.usecase.cancelsubscription.exception.SubscriptionNotFoundException;
@@ -15,15 +16,25 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 
 import java.time.LocalDateTime;
 import java.util.stream.Collectors;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    @ExceptionHandler(InvalidRequestException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidRequest(
+            InvalidRequestException exception,
+            HttpServletRequest request
+    ) {
+        return buildResponse(HttpStatus.BAD_REQUEST, exception.getMessage(), request);
+    }
 
     @ExceptionHandler(ClientNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleClientNotFound(
@@ -89,6 +100,14 @@ public class GlobalExceptionHandler {
         return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, exception.getMessage(), request);
     }
 
+    @ExceptionHandler(TransactionHistoryRetrievalException.class)
+    public ResponseEntity<ErrorResponse> handleTransactionHistoryRetrieval(
+            TransactionHistoryRetrievalException exception,
+            HttpServletRequest request
+    ) {
+        return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, exception.getMessage(), request);
+    }
+
     @ExceptionHandler(SubscriptionPersistenceException.class)
     public ResponseEntity<ErrorResponse> handleSubscriptionPersistence(
             SubscriptionPersistenceException exception,
@@ -122,6 +141,28 @@ public class GlobalExceptionHandler {
                 .getFieldErrors()
                 .stream()
                 .map(this::formatFieldError)
+                .collect(Collectors.joining(", "));
+
+        return buildResponse(HttpStatus.BAD_REQUEST, message, request);
+    }
+
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<ErrorResponse> handleMissingServletRequestParameter(
+            MissingServletRequestParameterException exception,
+            HttpServletRequest request
+    ) {
+        return buildResponse(HttpStatus.BAD_REQUEST, exception.getParameterName() + " is required", request);
+    }
+
+    @ExceptionHandler(HandlerMethodValidationException.class)
+    public ResponseEntity<ErrorResponse> handleHandlerMethodValidation(
+            HandlerMethodValidationException exception,
+            HttpServletRequest request
+    ) {
+        String message = exception.getParameterValidationResults()
+                .stream()
+                .flatMap(result -> result.getResolvableErrors().stream())
+                .map(error -> error.getDefaultMessage() != null ? error.getDefaultMessage() : "Invalid request parameter")
                 .collect(Collectors.joining(", "));
 
         return buildResponse(HttpStatus.BAD_REQUEST, message, request);
