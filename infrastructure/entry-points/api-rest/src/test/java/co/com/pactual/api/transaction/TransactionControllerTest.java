@@ -18,6 +18,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -55,9 +56,20 @@ class TransactionControllerTest {
     }
 
     @Test
+    void shouldTrimClientIdBeforeCallingUseCase() throws Exception {
+        when(getTransactionHistoryUseCase.execute("client-001")).thenReturn(List.of());
+
+        mockMvc.perform(get("/transactions").param("clientId", "  client-001  "))
+                .andExpect(status().isOk());
+
+        verify(getTransactionHistoryUseCase).execute("client-001");
+    }
+
+    @Test
     void shouldReturnBadRequestWhenClientIdIsMissing() throws Exception {
         mockMvc.perform(get("/transactions"))
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("REQUEST_VALIDATION_ERROR"))
                 .andExpect(jsonPath("$.message").value("clientId is required"));
     }
 
@@ -65,6 +77,7 @@ class TransactionControllerTest {
     void shouldReturnBadRequestWhenClientIdIsBlank() throws Exception {
         mockMvc.perform(get("/transactions").param("clientId", " "))
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("REQUEST_VALIDATION_ERROR"))
                 .andExpect(jsonPath("$.message").value("clientId is required"));
     }
 
@@ -75,7 +88,16 @@ class TransactionControllerTest {
 
         mockMvc.perform(get("/transactions").param("clientId", "client-001"))
                 .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.code").value("TRANSACTION_HISTORY_RETRIEVAL_ERROR"))
                 .andExpect(jsonPath("$.message").value("Could not retrieve transaction history"));
+    }
+
+    @Test
+    void shouldReturnBadRequestWhenClientIdFormatIsInvalid() throws Exception {
+        mockMvc.perform(get("/transactions").param("clientId", "client 001"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("REQUEST_VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.message").value("clientId has an invalid format"));
     }
 
     private Transaction transaction(String transactionId, TransactionType type, LocalDateTime createdAt) {

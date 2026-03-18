@@ -7,7 +7,7 @@ Permite:
 - Suscribirse a un fondo
 - Cancelar suscripciones
 - Consultar historial de transacciones
-- Integrar notificaciones
+- Publicar eventos de notificacion
 
 ## 🚀 Tecnologias
 
@@ -22,6 +22,27 @@ Permite:
   - ECR
   - App Runner
   - CloudFormation
+
+## 🗂️ Entregables
+
+Este repositorio contiene dos entregables distintos:
+
+- Parte 1: solucion backend en Java + Spring Boot + DynamoDB + Clean Architecture
+- Parte 2: ejercicio SQL independiente en [sql/parte-2/README.md](/home/certhakzu/Documentos/Ceiba/tecnical%20test/btg-funds-api/sql/parte-2/README.md)
+
+La Parte 2 no reutiliza ni depende de la persistencia NoSQL de la Parte 1; convive en el mismo repositorio solo por organizacion del entregable tecnico.
+
+## 📌 Parte 2 – SQL
+
+La solucion de la seccion SQL de la prueba tecnica esta en la ruta [sql/parte-2/](/home/certhakzu/Documentos/Ceiba/tecnical%20test/btg-funds-api/sql/parte-2).
+
+Accesos directos:
+
+- Documentacion: [sql/parte-2/README.md](/home/certhakzu/Documentos/Ceiba/tecnical%20test/btg-funds-api/sql/parte-2/README.md)
+- Consulta final: [sql/parte-2/solution.sql](/home/certhakzu/Documentos/Ceiba/tecnical%20test/btg-funds-api/sql/parte-2/solution.sql)
+- Analisis: [sql/parte-2/analysis.md](/home/certhakzu/Documentos/Ceiba/tecnical%20test/btg-funds-api/sql/parte-2/analysis.md)
+
+Esta parte es completamente independiente de la implementacion backend.
 
 ## 🧱 Arquitectura
 
@@ -120,6 +141,14 @@ La API usa excepciones de use case y un manejador global en `api-rest`.
 - `409` para conflictos de negocio
 - `500` para errores internos o de persistencia
 
+### Logging y trazabilidad
+
+- logging centralizado de casos de uso mediante aspecto en `app-service`
+- `GlobalExceptionHandler` con logs `WARN` para errores controlados y `ERROR` para errores inesperados
+- correlation id por request usando header `X-Correlation-Id`
+- si el header no llega, la API genera un UUID
+- el correlation id se devuelve en la respuesta y aparece en logs
+
 ## ☁️ Infraestructura AWS
 
 Provisionada con [cloudformation.yaml](/home/certhakzu/Documentos/Ceiba/tecnical%20test/btg-funds-api/deployment/aws/cloudformation.yaml).
@@ -132,6 +161,7 @@ Provisionada con [cloudformation.yaml](/home/certhakzu/Documentos/Ceiba/tecnical
   - Subscriptions
   - Transactions
 - SNS Topic para notificaciones
+- SQS suscrita al topic SNS para inspeccionar eventos publicados
 - ECR para imagenes Docker
 - App Runner para despliegue
 - Lambda para seed de fondos y clientes
@@ -219,6 +249,7 @@ curl --location 'http://localhost:8080/funds' \
 
 ```bash
 curl --location 'http://localhost:8080/subscriptions' \
+  --header 'X-Correlation-Id: corr-subscribe-001' \
   --header 'Content-Type: application/json' \
   --header 'Accept: application/json' \
   --data '{
@@ -231,14 +262,25 @@ curl --location 'http://localhost:8080/subscriptions' \
 ### Cancelar suscripcion
 
 ```bash
-curl --location --request DELETE 'http://localhost:8080/subscriptions/sub-001'
+curl --location --request DELETE 'http://localhost:8080/subscriptions/sub-001' \
+  --header 'X-Correlation-Id: corr-cancel-001'
 ```
 
 ### Consultar historial de transacciones
 
 ```bash
 curl --location 'http://localhost:8080/transactions?clientId=client-001' \
+  --header 'X-Correlation-Id: corr-transactions-001' \
   --header 'Accept: application/json'
+```
+
+### Error controlado de ejemplo
+
+```bash
+curl --location 'http://localhost:8080/subscriptions' \
+  --header 'X-Correlation-Id: corr-error-001' \
+  --header 'Content-Type: application/json' \
+  --data '{}'
 ```
 
 ## 🌐 Despliegue en App Runner
@@ -260,6 +302,7 @@ curl --location 'https://q5d8y4kqwp.us-east-1.awsapprunner.com/funds' \
 
 ```bash
 curl --location 'https://q5d8y4kqwp.us-east-1.awsapprunner.com/subscriptions' \
+  --header 'X-Correlation-Id: corr-subscribe-001' \
   --header 'Content-Type: application/json' \
   --header 'Accept: application/json' \
   --data '{
@@ -272,13 +315,15 @@ curl --location 'https://q5d8y4kqwp.us-east-1.awsapprunner.com/subscriptions' \
 ### Cancelar suscripcion
 
 ```bash
-curl --location --request DELETE 'https://q5d8y4kqwp.us-east-1.awsapprunner.com/subscriptions/sub-001'
+curl --location --request DELETE 'https://q5d8y4kqwp.us-east-1.awsapprunner.com/subscriptions/sub-001' \
+  --header 'X-Correlation-Id: corr-cancel-001'
 ```
 
 ### Historial de transacciones
 
 ```bash
 curl --location 'https://q5d8y4kqwp.us-east-1.awsapprunner.com/transactions?clientId=client-001' \
+  --header 'X-Correlation-Id: corr-transactions-001' \
   --header 'Accept: application/json'
 ```
 
@@ -369,6 +414,63 @@ Ejemplos actuales:
 
 - `GET /transactions`
   - `clientId` requerido como query param
+
+## 📣 Eventos SNS
+
+La aplicacion publica eventos al:
+
+- suscribirse a un fondo
+- cancelar una suscripcion
+
+El payload incluye campos como:
+
+- `eventType`
+- `subscriptionId`
+- `clientId`
+- `fundId`
+- `amount`
+- `timestamp`
+- `status`
+- `channel`
+- `destination`
+
+La publicacion a SNS es `best-effort`: si falla, no rompe la operacion principal.
+
+Para validar en AWS, el stack crea una cola SQS suscrita al topic SNS. Asi puedes inspeccionar el mensaje publicado sin depender de email o SMS reales.
+
+## 🚨 Contrato de error
+
+Las respuestas de error usan un formato uniforme:
+
+```json
+{
+  "code": "CLIENT_NOT_FOUND",
+  "timestamp": "2026-03-18T14:12:05.629",
+  "status": 404,
+  "error": "Not Found",
+  "message": "Cliente no encontrado con id client-001",
+  "path": "/subscriptions",
+  "correlationId": "corr-sub-404"
+}
+```
+
+Codigos usados actualmente:
+
+- `REQUEST_VALIDATION_ERROR`
+- `INVALID_REQUEST`
+- `INVALID_REQUEST_PAYLOAD`
+- `CLIENT_NOT_FOUND`
+- `FUND_NOT_FOUND`
+- `SUBSCRIPTION_NOT_FOUND`
+- `SUBSCRIPTION_ALREADY_CANCELLED`
+- `ACTIVE_SUBSCRIPTION_ALREADY_EXISTS`
+- `INSUFFICIENT_BALANCE`
+- `MINIMUM_SUBSCRIPTION_AMOUNT`
+- `FUNDS_RETRIEVAL_ERROR`
+- `TRANSACTION_HISTORY_RETRIEVAL_ERROR`
+- `SUBSCRIPTION_PERSISTENCE_ERROR`
+- `SUBSCRIPTION_CANCELLATION_PERSISTENCE_ERROR`
+- `INTERNAL_ERROR`
 
 ## ⚠️ Consideraciones tecnicas
 

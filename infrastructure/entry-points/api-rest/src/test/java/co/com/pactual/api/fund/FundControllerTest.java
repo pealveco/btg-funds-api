@@ -72,11 +72,13 @@ class FundControllerTest {
                 .when(getFundsUseCase)
                 .execute();
 
-        mockMvc.perform(get("/funds"))
+        mockMvc.perform(get("/funds").header("X-Correlation-Id", "corr-funds-001"))
                 .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.code").value("FUNDS_RETRIEVAL_ERROR"))
                 .andExpect(jsonPath("$.status").value(500))
                 .andExpect(jsonPath("$.error").value("Internal Server Error"))
                 .andExpect(jsonPath("$.message").value("Could not retrieve available funds"))
-                .andExpect(jsonPath("$.path").value("/funds"));
+                .andExpect(jsonPath("$.path").value("/funds"))
+                .andExpect(jsonPath("$.correlationId").value("corr-funds-001"));
     }
 }

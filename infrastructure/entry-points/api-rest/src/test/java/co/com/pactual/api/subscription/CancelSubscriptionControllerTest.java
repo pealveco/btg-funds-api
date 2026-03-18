@@ -55,6 +55,7 @@ class CancelSubscriptionControllerTest {
 
         mockMvc.perform(delete("/subscriptions/sub-404"))
                 .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("SUBSCRIPTION_NOT_FOUND"))
                 .andExpect(jsonPath("$.status").value(404))
                 .andExpect(jsonPath("$.message").value("Suscripcion no encontrada con id sub-404"));
     }
@@ -67,7 +68,16 @@ class CancelSubscriptionControllerTest {
 
         mockMvc.perform(delete("/subscriptions/sub-001"))
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("SUBSCRIPTION_ALREADY_CANCELLED"))
                 .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.message").value("La suscripcion sub-001 ya se encuentra cancelada"));
+    }
+
+    @Test
+    void shouldTrimSubscriptionIdBeforeCallingUseCase() throws Exception {
+        mockMvc.perform(delete("/subscriptions/{subscriptionId}", "  sub-001  "))
+                .andExpect(status().isNoContent());
+
+        verify(cancelSubscriptionUseCase).execute("sub-001");
     }
 }

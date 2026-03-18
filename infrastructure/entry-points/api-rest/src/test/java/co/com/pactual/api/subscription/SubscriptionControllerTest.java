@@ -20,6 +20,7 @@ import java.time.LocalDateTime;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -76,11 +77,38 @@ class SubscriptionControllerTest {
     }
 
     @Test
+    void shouldTrimStringInputsBeforeCallingUseCase() throws Exception {
+        when(subscribeFundUseCase.execute(eq("client-001"), eq("fund-001"), eq(BigDecimal.valueOf(100_000L))))
+                .thenReturn(Subscription.builder()
+                        .subscriptionId("sub-001")
+                        .clientId("client-001")
+                        .fundId("fund-001")
+                        .amount(BigDecimal.valueOf(100_000L))
+                        .status(SubscriptionStatus.ACTIVE)
+                        .createdAt(LocalDateTime.of(2026, 3, 18, 0, 0))
+                        .build());
+
+        mockMvc.perform(post("/subscriptions")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "clientId": "  client-001  ",
+                                  "fundId": "  fund-001  ",
+                                  "amount": 100000
+                                }
+                                """))
+                .andExpect(status().isCreated());
+
+        verify(subscribeFundUseCase).execute("client-001", "fund-001", BigDecimal.valueOf(100_000L));
+    }
+
+    @Test
     void shouldReturnNotFoundWhenClientDoesNotExist() throws Exception {
         when(subscribeFundUseCase.execute(any(), any(), any()))
                 .thenThrow(new ClientNotFoundException("client-001"));
 
         mockMvc.perform(post("/subscriptions")
+                        .header("X-Correlation-Id", "corr-sub-404")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -90,7 +118,9 @@ class SubscriptionControllerTest {
                                 }
                                 """))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.status").value(404));
+                .andExpect(jsonPath("$.code").value("CLIENT_NOT_FOUND"))
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.correlationId").value("corr-sub-404"));
     }
 
     @Test
@@ -115,6 +145,7 @@ class SubscriptionControllerTest {
     @Test
     void shouldReturnBadRequestWhenPayloadHasMissingFields() throws Exception {
         mockMvc.perform(post("/subscriptions")
+                        .header("X-Correlation-Id", "corr-validation-001")
                         .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                                 {
@@ -123,10 +154,12 @@ class SubscriptionControllerTest {
                                 }
                                 """))
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("REQUEST_VALIDATION_ERROR"))
                 .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.message", containsString("clientId: clientId is required")))
                 .andExpect(jsonPath("$.message", containsString("fundId: fundId is required")))
-                .andExpect(jsonPath("$.message", containsString("amount: amount is required")));
+                .andExpect(jsonPath("$.message", containsString("amount: amount is required")))
+                .andExpect(jsonPath("$.correlationId").value("corr-validation-001"));
     }
 
     @Test
@@ -143,5 +176,21 @@ class SubscriptionControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.message").value("amount: amount must be greater than zero"));
+    }
+
+    @Test
+    void shouldReturnBadRequestWhenIdsHaveInvalidFormat() throws Exception {
+        mockMvc.perform(post("/subscriptions")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "clientId": "client 001",
+                                  "fundId": "fund-001",
+                                  "amount": 100000
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("REQUEST_VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.message", containsString("clientId: clientId has an invalid format")));
     }
 }
